@@ -1,0 +1,558 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { Trophy, AlertCircle, RefreshCw, Check, X, FileText, Download, Users, Globe, Loader2 } from 'lucide-react';
+
+const EVENTS = [
+  { id: '333', name: '3x3x3', rankBy: 'average' },
+  { id: '222', name: '2x2x2', rankBy: 'average' },
+  { id: '444', name: '4x4x4', rankBy: 'average' },
+  { id: '555', name: '5x5x5', rankBy: 'average' },
+  { id: '666', name: '6x6x6', rankBy: 'average' },
+  { id: '777', name: '7x7x7', rankBy: 'average' },
+  { id: '333bf', name: '3x3 BLD', rankBy: 'single' },
+  { id: '333fm', name: 'FMC', rankBy: 'single' }, // FMC ranked by single result (move count)
+  { id: '333oh', name: '3x3 OH', rankBy: 'average' },
+  { id: 'clock', name: 'Clock', rankBy: 'average' },
+  { id: 'minx', name: 'Megaminx', rankBy: 'average' },
+  { id: 'pyram', name: 'Pyraminx', rankBy: 'average' },
+  { id: 'skewb', name: 'Skewb', rankBy: 'average' },
+  { id: 'sq1', name: 'Square-1', rankBy: 'average' },
+  { id: '444bf', name: '4x4 BLD', rankBy: 'single' },
+  { id: '555bf', name: '5x5 BLD', rankBy: 'single' },
+  { id: '333mbf', name: 'Multi-Blind', rankBy: 'single' },
+];
+
+/**
+ * Utility to format WCA times (in centiseconds) or special results (FMC, MBLD).
+ * @param {number} centiseconds - The raw WCA result (in centiseconds or the packed MBLD integer).
+ * @param {string} eventId - The event ID.
+ * @returns {string} The formatted result string.
+ */
+const formatTime = (centiseconds, eventId) => {
+  if (!centiseconds || centiseconds <= 0) return "";
+  
+  // 1. Multi-Blind (333mbf) Decoding
+  if (eventId === '333mbf') {
+      const R = centiseconds;
+      
+      // Components: 0DDTTTTTMM (where DD is difference, TTTTT is time, MM is missed)
+      const missed = R % 100; // MM
+      const timeInSeconds = Math.floor(R / 100) % 100000; // TTTTT
+      const difference = Math.floor(R / 10000000); // DD (or 0DD)
+
+      // Time conversion
+      const mins = Math.floor(timeInSeconds / 60);
+      const secs = timeInSeconds % 60;
+      const timeStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+      // Solved/Attempted calculation based on difference (DD)
+      // Solved = (99 - DD) + Missed
+      const solved = (99 - difference) + missed;
+      const attempted = solved + missed;
+      
+      if (solved < 0 || attempted < 0) return R.toString(); // Safety check for impossible values
+
+      return `${solved}/${attempted} ${timeStr}`;
+  }
+
+  // 2. Fewest Moves Challenge (333fm) Decoding
+  if (eventId === '333fm') {
+      // FMC is stored as centimoves (e.g., 2500 = 25.00 moves)
+      return (centiseconds / 100).toFixed(2);
+  }
+
+  // 3. Standard Time Formatting (3x3, 2x2, etc.)
+  let mins = Math.floor(centiseconds / 6000);
+  let secs = Math.floor((centiseconds % 6000) / 100);
+  let decis = centiseconds % 100;
+
+  let sDecis = decis < 10 ? `0${decis}` : decis;
+  let sSecs = secs < 10 && mins > 0 ? `0${secs}` : secs;
+
+  if (mins > 0) return `${mins}:${sSecs}.${sDecis}`;
+  return `${secs}.${sDecis}`;
+};
+
+export default function App() {
+  const [inputType, setInputType] = useState('url'); // 'text' or 'url'
+  const [inputText, setInputText] = useState('');
+  const [inputUrl, setInputUrl] = useState('https://cubing-tw.net/event/2025TaiwanChampionship/competitors');
+  const [competitors, setCompetitors] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [fetchingUrl, setFetchingUrl] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [activeTab, setActiveTab] = useState('333');
+  const [errors, setErrors] = useState([]);
+
+  // Load demo data
+  const loadDemo = () => {
+    setInputType('text');
+    const demo = `1	Chia-Leo Lin (林珈樂)	2006LINC01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	-	-	✔
+2	Ching-Cheng Hsieh (謝京城)	2013HSIE01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	-	-	-
+3	Yi-Jen Hsueh (薛以仁)	2016HSUE02	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔
+4	Yueh Li (李悅)	2024LIYU02	Taiwan	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-`;
+    setInputText(demo);
+  };
+
+  const fetchFromUrl = async () => {
+    if (!inputUrl) return;
+    setFetchingUrl(true);
+    setErrors([]);
+
+    try {
+        // Use allorigins as a CORS proxy
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(inputUrl)}`;
+        const response = await fetch(proxyUrl);
+        const data = await response.json();
+        
+        if (!data.contents) throw new Error("No content received from proxy.");
+
+        // Parse HTML
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(data.contents, 'text/html');
+        
+        // Find rows. We assume the main table has rows with WCA IDs.
+        const rows = doc.querySelectorAll('tr');
+        let extractedText = "";
+
+        rows.forEach(row => {
+            // We iterate cells to ensure separation
+            const cells = Array.from(row.querySelectorAll('td, th'));
+            if (cells.length > 0) {
+                // Use a tab separator for cleaner tokenization later
+                const rowText = cells.map(cell => cell.innerText.trim()).join('\t');
+                extractedText += rowText + '\n';
+            }
+        });
+
+        if (extractedText.length < 50) {
+            throw new Error("Could not find a valid table in the fetched URL.");
+        }
+
+        setInputType('text'); // Switch to text view to show result
+        setInputText(extractedText); // Populate the text area
+        
+        // Auto-trigger parse after a short delay to allow state update
+        setTimeout(() => parseInput(extractedText), 100);
+
+    } catch (err) {
+        setErrors([`Failed to fetch from URL: ${err.message}. Try copy-pasting manually.`]);
+    } finally {
+        setFetchingUrl(false);
+    }
+  };
+
+  const parseInput = (textToParse = inputText) => {
+    const lines = textToParse.split('\n').filter(line => line.trim() !== '');
+    const parsed = [];
+    const parseErrors = [];
+
+    lines.forEach((line, index) => {
+      // Regex to find WCA ID: 4 digits, 4 letters, 2 digits
+      const wcaIdMatch = line.match(/(\d{4}[A-Z]{4}\d{2})/);
+      
+      if (wcaIdMatch) {
+        const wcaId = wcaIdMatch[0];
+        
+        const namePart = line.substring(0, line.indexOf(wcaId)).trim();
+        const cleanName = namePart.replace(/^\d+\s*/, '').trim();
+        const rest = line.substring(line.indexOf(wcaId) + wcaId.length);
+        
+        // Match standard checkmark (✔), light checkmark (✓), or dash (-)
+        // We look for 17 consecutive checkmarks/dashes after the name/country/gender/etc.
+        const eventMarkers = rest.match(/([✔✓\-]\s*){17}/);
+        
+        if (eventMarkers) {
+            // Extract and clean the 17 markers
+            const markerString = eventMarkers[0];
+            const userEvents = markerString.match(/[✔✓\-]/g);
+            
+            const eventsRegistered = {};
+            EVENTS.forEach((ev, i) => {
+                // Check if the marker is a checkmark
+                eventsRegistered[ev.id] = userEvents[i] === '✔' || userEvents[i] === '✓';
+            });
+
+            // Try to guess country/gender which usually appear between ID and events
+            // This is a rough heuristic as the table structure can vary.
+            const preamble = rest.substring(0, rest.indexOf(markerString)).trim();
+            const preambleTokens = preamble.split(/\s+/).filter(t => t.length > 0);
+            
+            // Assume the first token is the country for now if we can't be sure
+            const countryGuess = preambleTokens[0] || 'Unknown';
+
+
+            parsed.push({
+                name: cleanName,
+                wcaId: wcaId,
+                events: eventsRegistered,
+                ranks: { singles: {}, averages: {} }, 
+                country: countryGuess 
+            });
+        } else {
+             parseErrors.push(`Line ${index + 1}: Found ID ${wcaId} but couldn't reliably find 17 event columns. Check marks might be missing.`);
+        }
+      }
+    });
+
+    if (parsed.length === 0) {
+        if (!textToParse.trim()) return; 
+        setErrors(["No valid competitors found. Please check the format or URL."]);
+        return;
+    }
+
+    setCompetitors(parsed);
+    setErrors(parseErrors);
+    // Automatically start fetching WCA data for the found competitors
+    fetchData(parsed);
+  };
+
+  const fetchData = async (competitorList) => {
+    setLoading(true);
+    setProgress(0);
+    const results = [...competitorList];
+    const total = results.length;
+    let completed = 0;
+
+    // Use a small batch size for fetching to prevent rate limiting
+    const BATCH_SIZE = 5;
+    
+    // Simple retry mechanism with exponential backoff (1, 2, 4 seconds)
+    const fetchWithRetry = async (url, retries = 3) => {
+        for (let i = 0; i < retries; i++) {
+            try {
+                const response = await fetch(url);
+                if (response.ok) return await response.json();
+                if (response.status === 404) return null; // WCA ID not found
+                
+                // For other errors (e.g., 429 Rate Limit), retry
+                if (i < retries - 1) {
+                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                } else {
+                    throw new Error(`Failed to fetch after ${retries} attempts.`);
+                }
+            } catch (error) {
+                if (i === retries - 1) throw error;
+            }
+        }
+    };
+
+    for (let i = 0; i < total; i += BATCH_SIZE) {
+        const batch = results.slice(i, i + BATCH_SIZE);
+        const promises = batch.map(async (comp) => {
+            const url = `https://raw.githubusercontent.com/robiningelbrecht/wca-rest-api/master/api/persons/${comp.wcaId}.json`;
+            try {
+                const data = await fetchWithRetry(url);
+                
+                if (data) {
+                    comp.ranks = {
+                        singles: {},
+                        averages: {}
+                    };
+
+                    if (data.rank && data.rank.singles) {
+                        data.rank.singles.forEach(r => {
+                            comp.ranks.singles[r.eventId] = r.best;
+                        });
+                    }
+                    if (data.rank && data.rank.averages) {
+                        data.rank.averages.forEach(r => {
+                            comp.ranks.averages[r.eventId] = r.best;
+                        });
+                    }
+                    // Use WCA country code if available, otherwise keep the guessed one
+                    comp.country = data.country || comp.country;
+                }
+
+            } catch (err) {
+                // Log and continue
+                console.warn(`Could not fetch data for ${comp.wcaId}: ${err.message}`);
+            }
+        });
+
+        await Promise.all(promises);
+        completed += batch.length;
+        setProgress(Math.round((completed / total) * 100));
+    }
+
+    setCompetitors(results);
+    setLoading(false);
+  };
+
+  const sortedCompetitors = useMemo(() => {
+      const registered = competitors.filter(c => c.events && c.events[activeTab]);
+      const eventInfo = EVENTS.find(e => e.id === activeTab);
+      const isSingleRank = eventInfo?.rankBy === 'single';
+
+      return registered.sort((a, b) => {
+          // Primary rank based on the event's rankBy setting (single or average)
+          const rankA = isSingleRank 
+            ? (a.ranks?.singles?.[activeTab] || Infinity) 
+            : (a.ranks?.averages?.[activeTab] || Infinity);
+            
+          const rankB = isSingleRank 
+            ? (b.ranks?.singles?.[activeTab] || Infinity) 
+            : (b.ranks?.averages?.[activeTab] || Infinity);
+
+          if (rankA !== rankB) return rankA - rankB;
+
+          // Secondary rank (if primary ranks are equal)
+          const secRankA = isSingleRank 
+            ? (a.ranks?.averages?.[activeTab] || Infinity) 
+            : (a.ranks?.singles?.[activeTab] || Infinity);
+            
+          const secRankB = isSingleRank 
+            ? (b.ranks?.averages?.[activeTab] || Infinity) 
+            : (b.ranks?.singles?.[activeTab] || Infinity);
+            
+          return secRankA - secRankB;
+      });
+  }, [competitors, activeTab]);
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
+              <Trophy className="text-yellow-500 w-8 h-8" />
+              Psych Sheet Generator
+            </h1>
+            <p className="text-slate-500 mt-2">
+              Generate pre-rankings for WCA competitions based on registered events.
+            </p>
+          </div>
+          <div className="flex gap-2">
+             <button 
+               onClick={loadDemo}
+               className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors"
+             >
+               Load Demo Data
+             </button>
+             <button 
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+             >
+               <RefreshCw className="w-4 h-4" /> Reset
+             </button>
+          </div>
+        </div>
+
+        {/* Input Section */}
+        {competitors.length === 0 && (
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            
+            <div className="flex gap-4 mb-6 border-b border-slate-100">
+                <button 
+                    onClick={() => setInputType('url')}
+                    className={`pb-3 px-2 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors ${inputType === 'url' ? 'border-blue-500 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    <Globe className="w-4 h-4" /> Fetch from URL
+                </button>
+                <button 
+                    onClick={() => setInputType('text')}
+                    className={`pb-3 px-2 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors ${inputType === 'text' ? 'border-blue-500 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    <FileText className="w-4 h-4" /> Paste Text
+                </button>
+            </div>
+
+            {inputType === 'url' ? (
+                <div className="space-y-4">
+                    <p className="text-sm text-slate-500">
+                        Enter the URL of the competitor list table. We will try to fetch and parse it using a proxy.
+                        <br/>
+                        <span className="text-xs text-orange-500">Note: This relies on a public proxy (allorigins.win) and may be blocked by some networks.</span>
+                    </p>
+                    <div className="flex gap-2">
+                        <input 
+                            type="text" 
+                            value={inputUrl}
+                            onChange={(e) => setInputUrl(e.target.value)}
+                            className="flex-1 p-3 border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                            placeholder="https://cubing-tw.net/..."
+                        />
+                        <button
+                            onClick={fetchFromUrl}
+                            disabled={fetchingUrl}
+                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-semibold shadow-md transition-all flex items-center gap-2 min-w-[140px] justify-center"
+                        >
+                            {fetchingUrl ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Fetch & Parse'}
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    <p className="text-sm text-slate-500">
+                        Copy the table directly from the competitor list page. The app looks for the <strong>WCA ID</strong> and the <strong>17 event checkmarks</strong> (✔, ✓, or -).
+                    </p>
+                    <textarea
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        placeholder={`1 Chia-Leo Lin ... 2006LINC01 ... ✔ ✔ ✔ ...`}
+                        className="w-full h-64 p-4 font-mono text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-y"
+                    />
+                    <button
+                        onClick={() => parseInput(inputText)}
+                        disabled={!inputText.trim() || loading}
+                        className="w-full sm:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-semibold shadow-md transition-all flex items-center justify-center gap-2"
+                    >
+                        Generate Psych Sheet
+                    </button>
+                </div>
+            )}
+
+            {errors.length > 0 && (
+                <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 space-y-1 animate-in fade-in">
+                    <div className="font-bold flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" /> Issues Found:
+                    </div>
+                    {errors.slice(0, 5).map((err, i) => <div key={i}>{err}</div>)}
+                </div>
+            )}
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <div className="bg-white p-12 rounded-xl shadow-sm border border-slate-200 text-center">
+             <div className="w-full max-w-md mx-auto">
+                <div className="flex justify-between text-sm font-medium text-slate-600 mb-2">
+                    <span>Fetching WCA Profiles...</span>
+                    <span>{progress}%</span>
+                </div>
+                <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                    <div 
+                        className="bg-blue-600 h-2.5 rounded-full transition-all duration-300 ease-out" 
+                        style={{ width: `${progress}%` }}
+                    ></div>
+                </div>
+                <p className="mt-4 text-slate-500 text-sm">
+                    Retrieving official results for {competitors.length} competitors from the WCA database.
+                </p>
+             </div>
+          </div>
+        )}
+
+        {/* Results Section */}
+        {!loading && competitors.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[600px]">
+            {/* Event Tabs */}
+            <div className="border-b border-slate-200 overflow-x-auto scrollbar-hide">
+              <div className="flex p-2 gap-1 min-w-max">
+                {EVENTS.map(ev => (
+                  <button
+                    key={ev.id}
+                    onClick={() => setActiveTab(ev.id)}
+                    className={`
+                      px-4 py-2 rounded-lg text-sm font-medium transition-all
+                      ${activeTab === ev.id 
+                        ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200 shadow-sm' 
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
+                    `}
+                  >
+                    {ev.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Stats Header */}
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-800">{EVENTS.find(e => e.id === activeTab).name}</span>
+                    <span className="text-slate-400 text-sm">•</span>
+                    <span className="text-slate-500 text-sm">{sortedCompetitors.length} Registered</span>
+                    <span className="text-slate-400 text-sm">•</span>
+                    <span className="text-slate-500 text-sm">
+                        Ranking by: <strong className="capitalize">{EVENTS.find(e => e.id === activeTab).rankBy}</strong>
+                    </span>
+                </div>
+                <div className="text-xs text-slate-400 hidden sm:block">
+                    Results retrieved from WCA public records
+                </div>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
+                    <th className="p-4 w-16 text-center">Rank</th>
+                    <th className="p-4">Name</th>
+                    <th className="p-4 hidden sm:table-cell">WCA ID</th>
+                    <th className="p-4 hidden md:table-cell">Country</th>
+                    <th className={`p-4 text-right ${EVENTS.find(e => e.id === activeTab).rankBy === 'single' ? 'bg-blue-50 text-blue-800 font-bold' : ''}`}>
+                        Best Single
+                    </th>
+                    <th className={`p-4 text-right ${EVENTS.find(e => e.id === activeTab).rankBy === 'average' ? 'bg-blue-50 text-blue-800 font-bold' : ''}`}>
+                        Best Average
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {sortedCompetitors.map((comp, idx) => {
+                    const single = comp.ranks?.singles?.[activeTab];
+                    const average = comp.ranks?.averages?.[activeTab];
+                    
+                    const rankBy = EVENTS.find(e => e.id === activeTab).rankBy;
+                    const primaryResult = rankBy === 'single' ? single : average;
+                    const isUnranked = !primaryResult;
+                    const isTop12 = !isUnranked && idx < 12;
+
+                    let rowClass = 'hover:bg-slate-50 transition-colors';
+                    if (isUnranked) {
+                        rowClass = 'opacity-50 bg-slate-50/50';
+                    } else if (isTop12) {
+                        rowClass = 'bg-green-50 hover:bg-green-100 transition-colors ring-1 ring-green-200';
+                    }
+
+                    return (
+                      <tr 
+                        key={comp.wcaId} 
+                        className={rowClass}
+                      >
+                        <td className="p-4 text-center font-mono text-slate-400">
+                            {isUnranked ? '-' : idx + 1}
+                        </td>
+                        <td className={`p-4 font-medium ${isTop12 ? 'text-green-800' : 'text-slate-800'}`}>
+                            {comp.name}
+                            {isUnranked && <span className="ml-2 text-xs text-yellow-600 bg-yellow-100 px-1.5 py-0.5 rounded">New/No Data</span>}
+                        </td>
+                        <td className="p-4 text-sm text-slate-500 font-mono hidden sm:table-cell">
+                            <a 
+                                href={`https://www.worldcubeassociation.org/persons/${comp.wcaId}`} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="hover:text-blue-600 hover:underline"
+                            >
+                                {comp.wcaId}
+                            </a>
+                        </td>
+                        <td className="p-4 text-sm text-slate-600 hidden md:table-cell">{comp.country}</td>
+                        <td className={`p-4 text-right font-mono ${!isUnranked && rankBy === 'single' ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
+                            {single ? formatTime(single, activeTab) : '-'}
+                        </td>
+                        <td className={`p-4 text-right font-mono ${!isUnranked && rankBy === 'average' ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
+                            {average ? formatTime(average, activeTab) : '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {sortedCompetitors.length === 0 && (
+                      <tr>
+                          <td colSpan={6} className="p-12 text-center text-slate-400">
+                              No registered competitors found for this event.
+                          </td>
+                      </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
