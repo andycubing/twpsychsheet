@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WCA Competitor Analyzer</title>
+    <title>Taiwan Competitions Psych Sheet Generator</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load React -->
@@ -46,10 +46,7 @@
         const AlertCircle = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>);
         const RefreshCw = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 18 0"/><path d="M3 12a9 9 0 0 1 18 0"/></svg>);
         const FileText = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>);
-        const Download = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>);
         const Users = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>);
-        const Globe = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>);
-        const Loader2 = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>);
         const Settings = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.73l-.15.1a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1 0-2.73l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>);
         
         // ------------------------------------------
@@ -104,11 +101,12 @@
               return `${solved}/${attempted} ${timeStr}`;
           }
 
-          // 2. FMC (333fm) - Apply /100 suffix only for the 'Average' column as requested
+          // 2. FMC (333fm) - Apply custom formatting
           if (eventId === '333fm') {
               const moves = centiseconds;
               if (resultType === 'average') {
-                  return (centiseconds / 100).toFixed(2);
+                  // Custom request: centiseconds / 100, fixed to 2 decimals
+                  return (moves / 100).toFixed(2);
               }
               // Single result is just the move count
               return moves.toString();
@@ -125,17 +123,32 @@
           if (mins > 0) return `${mins}:${sSecs}.${sDecis}`;
           return `${secs}.${sDecis}`;
         };
+        
+        // Helper for exponential backoff retry logic
+        const fetchWithRetry = async (url, retries = 3) => {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url);
+                    if (response.ok) return await response.json();
+                    if (response.status === 404) return null; 
+                    if (i < retries - 1) {
+                        await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                    } else {
+                        throw new Error(`Failed after ${retries} retries`);
+                    }
+                } catch (err) {
+                    if (i === retries - 1) throw err;
+                }
+            }
+        };
 
         function App() {
-          const [inputType, setInputType] = useState('url'); // 'text' or 'url'
           const [inputText, setInputText] = useState('');
-          const [inputUrl, setInputUrl] = useState('https://cubing-tw.net/event/2025TaiwanChampionship/competitors');
           
           const [selectedEventIds, setSelectedEventIds] = useState(EVENTS_DATA.map(e => e.id));
           
           const [competitors, setCompetitors] = useState([]);
           const [loading, setLoading] = useState(false);
-          const [fetchingUrl, setFetchingUrl] = useState(false);
           const [progress, setProgress] = useState(0);
           const [activeTab, setActiveTab] = useState('333');
           const [errors, setErrors] = useState([]);
@@ -172,10 +185,9 @@
           const clearAllEvents = () => setSelectedEventIds([]);
 
           const loadDemo = () => {
-            setInputType('text');
             // Re-select all events to match demo data
             selectAllEvents();
-            const demo = `11	Chia-Leo Lin (林珈樂)	2006LINC01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	-	-	✔
+            const demo = `1	Chia-Leo Lin (林珈樂)	2006LINC01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	-	-	✔
 2	Meng Chon Kuok (郭明臻)	2023KUOK01	Macau	女 Female	✔	✔	✔	✔	✔	✔	✔	-	-	✔	-	-	-	-	✔	✔	-
 3	Jerry Chung (鍾養浩)	2017HOJE01	Hong Kong	男 Male	✔	✔	✔	✔	✔	✔	✔	-	✔	✔	✔	✔	✔	-	-	-	-
 4	Ching-Cheng Hsieh (謝京城)	2013HSIE01	Taiwan	男 Male	✔	✔	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-
@@ -453,69 +465,6 @@
             setInputText(demo);
           };
 
-          // Helper for exponential backoff retry logic
-          const fetchWithRetry = async (url, retries = 3) => {
-              for (let i = 0; i < retries; i++) {
-                  try {
-                      const response = await fetch(url);
-                      if (response.ok) return await response.json();
-                      if (response.status === 404) return null; 
-                      if (i < retries - 1) {
-                          await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
-                      } else {
-                          throw new Error(`Failed after ${retries} retries`);
-                      }
-                  } catch (err) {
-                      if (i === retries - 1) throw err;
-                  }
-              }
-          };
-
-          const fetchFromUrl = async () => {
-            if (!inputUrl) return;
-            setFetchingUrl(true);
-            setErrors([]);
-
-            try {
-                // Using a CORS proxy to fetch the content
-                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(inputUrl)}`;
-                const data = await fetchWithRetry(proxyUrl);
-                
-                if (!data || !data.contents) throw new Error("No content received from proxy or failed to fetch.");
-
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(data.contents, 'text/html');
-                
-                const rows = doc.querySelectorAll('tr');
-                let extractedText = "";
-
-                rows.forEach(row => {
-                    // Only process rows that contain <td> or <th> elements (table data)
-                    const cells = Array.from(row.querySelectorAll('td, th'));
-                    if (cells.length > 0) {
-                        const rowText = cells.map(cell => cell.innerText.trim()).join('\t');
-                        extractedText += rowText + '\n';
-                    }
-                });
-
-                if (extractedText.length < 50) {
-                    throw new Error("Could not find a valid table in the fetched URL. Check the URL and try copy-pasting manually.");
-                }
-
-                setInputType('text');
-                setInputText(extractedText);
-                
-                // Slight delay to allow state update before parsing
-                setTimeout(() => parseInput(extractedText), 100);
-
-            } catch (err) {
-                console.error("Fetch error:", err);
-                setErrors([`Failed to fetch from URL: ${err.message}. Ensure the URL is correct and the site allows access.`]);
-            } finally {
-                setFetchingUrl(false);
-            }
-          };
-
           const parseInput = (textToParse = inputText) => {
             if (activeEvents.length === 0) {
                 setErrors(["Please select at least one event in the configuration above."]);
@@ -633,7 +582,10 @@
                             }
                         }
                     } catch (error) {
-                        console.error(`Error fetching ${comp.wcaId}:`, error);
+                        // Suppress logging of 404s for competitors who don't have a record yet
+                        if (!error.message.includes('404')) {
+                            console.error(`Error fetching ${comp.wcaId}:`, error);
+                        }
                     } finally {
                         completed++;
                         setProgress(Math.round((completed / total) * 100));
@@ -724,11 +676,9 @@
                 <div className="container mx-auto px-4 py-6">
                   <div className="flex items-center space-x-3">
                     <Trophy className="w-8 h-8 text-yellow-300" />
-                    <h1 className="text-2xl font-bold">WCA Competitor Analyzer</h1>
+                    <h1 className="text-2xl font-bold">Taiwan Competitions Psych Sheet Generator</h1>
                   </div>
-                  <p className="mt-2 text-blue-100 opacity-90">
-                    Parse registration lists, filter by event, and fetch global rankings automatically.
-                  </p>
+                  {/* Subtitle removed as requested */}
                 </div>
               </header>
 
@@ -785,76 +735,40 @@
                 </section>
 
 
-                {/* INPUT SECTION */}
+                {/* INPUT SECTION (Now simplified) */}
                 <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                  <div className="flex flex-col md:flex-row gap-4 mb-4">
-                    <button 
-                      onClick={() => setInputType('url')}
-                      className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${inputType === 'url' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                    >
-                      <Globe className="w-4 h-4 inline mr-2" />
-                      Import from URL
-                    </button>
-                    <button 
-                      onClick={() => setInputType('text')}
-                      className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${inputType === 'text' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                    >
-                      <FileText className="w-4 h-4 inline mr-2" />
-                      Paste Text
-                    </button>
-                  </div>
-
-                  {inputType === 'url' ? (
+                    <h2 className="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-slate-500" />
+                        Paste Registration Text
+                    </h2>
                     <div className="space-y-4">
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input 
-                          type="url" 
-                          value={inputUrl}
-                          onChange={(e) => setInputUrl(e.target.value)}
-                          placeholder="https://cubing-tw.net/event/.../competitors"
-                          className="flex-1 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                        <textarea 
+                            value={inputText}
+                            onChange={(e) => setInputText(e.target.value)}
+                            placeholder={`Paste the table rows here. It must contain the WCA ID (e.g. 2006LINC01) and the registration checkmarks/dashes in the order you selected above.\n\nExample:\n1 Chia-Leo Lin (林珈樂) 2006LINC01 Taiwan Male ✔ ✔ ✔ ✔ - - - ...`}
+                            className="w-full h-48 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-xs"
                         />
-                        <button 
-                          onClick={fetchFromUrl}
-                          disabled={fetchingUrl}
-                          className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center sm:justify-start"
-                        >
-                          {fetchingUrl ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Download className="w-4 h-4 mr-2"/>}
-                          {fetchingUrl ? 'Fetching...' : 'Fetch'}
-                        </button>
-                      </div>
-                      <p className="text-xs text-slate-500">Note: This uses a CORS proxy (`allorigins`). Fetching may fail if the target site blocks automated access. If so, switch to the 'Paste Text' tab.</p>
+                        <div className="flex flex-col sm:flex-row justify-between gap-4">
+                            <button onClick={loadDemo} className="text-sm text-blue-600 hover:underline text-left">Load Taiwan Championship 2025 Data</button>
+                            <button 
+                                onClick={() => parseInput()}
+                                className="bg-green-600 text-white px-8 py-2 rounded-lg font-medium hover:bg-green-700 flex items-center justify-center"
+                            >
+                                <RefreshCw className="w-4 h-4 mr-2" />
+                                Parse & Analyze
+                            </button>
+                        </div>
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <textarea 
-                        value={inputText}
-                        onChange={(e) => setInputText(e.target.value)}
-                        placeholder={`Paste the table rows here. It must contain the WCA ID (e.g. 2006LINC01) and the registration checkmarks/dashes in the order you selected above.\n\nExample:\n1 Chia-Leo Lin (林珈樂) 2006LINC01 Taiwan Male ✔ ✔ ✔ ✔ - - - ...`}
-                        className="w-full h-48 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-xs"
-                      />
-                      <div className="flex flex-col sm:flex-row justify-between gap-4">
-                        <button onClick={loadDemo} className="text-sm text-blue-600 hover:underline text-left">Load Demo Data (Taiwanese Championship structure)</button>
-                        <button 
-                          onClick={() => parseInput()}
-                          className="bg-green-600 text-white px-8 py-2 rounded-lg font-medium hover:bg-green-700 flex items-center justify-center"
-                        >
-                          <RefreshCw className="w-4 h-4 mr-2" />
-                          Parse & Analyze
-                        </button>
-                      </div>
-                    </div>
-                  )}
 
-                  {errors.length > 0 && (
-                    <div className="mt-4 p-4 bg-red-50 text-red-700 rounded-lg border border-red-200 text-sm space-y-1">
-                        <div className="font-bold flex items-center"><AlertCircle className="w-4 h-4 mr-2"/> Parsing Errors ({errors.length})</div>
-                        {errors.slice(0, 5).map((err, i) => (
-                            <div key={i}>{err}</div>
-                        ))}
-                        {errors.length > 5 && <div>...and {errors.length - 5} more lines had parsing issues.</div>}
-                    </div>
-                  )}
+                    {errors.length > 0 && (
+                        <div className="mt-4 p-4 bg-red-50 text-red-700 rounded-lg border border-red-200 text-sm space-y-1">
+                            <div className="font-bold flex items-center"><AlertCircle className="w-4 h-4 mr-2"/> Parsing Errors ({errors.length})</div>
+                            {errors.slice(0, 5).map((err, i) => (
+                                <div key={i}>{err}</div>
+                            ))}
+                            {errors.length > 5 && <div>...and {errors.length - 5} more lines had parsing issues.</div>}
+                        </div>
+                    )}
                 </section>
 
                 {/* RESULTS SECTION */}
