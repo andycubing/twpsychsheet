@@ -1,0 +1,26 @@
+:root{
+  --bg:#f6f8fa;
+  --card:#ffffff;
+  --accent:#0366d6;
+  --text:#24292f;
+}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+  background:var(--bg);
+  color:var(--text);
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  padding:3rem;
+}
+header{
+  max-width:720px;
+  background:var(--card);
+  border-radius:8px;
+  box-shadow:0 6px 18px rgba(13,17,23,0.08);
+  padding:2rem;
+}
+h1{color:var(--accent);margin:0 0 .5rem 0}
+p{margin:.25rem 0}
