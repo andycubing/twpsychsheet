@@ -1,0 +1,912 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { Trophy, AlertCircle, RefreshCw, Check, X, FileText, Download, Users, Globe, Loader2, Settings, ListFilter } from 'lucide-react';
+
+// The specific order mentioned for Taiwanese competitions
+const EVENTS_DATA = [
+  { id: '333', name: '3x3x3', rankBy: 'average' },
+  { id: '222', name: '2x2x2', rankBy: 'average' },
+  { id: '444', name: '4x4x4', rankBy: 'average' },
+  { id: '555', name: '5x5x5', rankBy: 'average' },
+  { id: '666', name: '6x6x6', rankBy: 'average' },
+  { id: '777', name: '7x7x7', rankBy: 'average' },
+  { id: '333bf', name: '3x3 BLD', rankBy: 'single' },
+  { id: '333fm', name: 'FMC', rankBy: 'single' },
+  { id: '333oh', name: '3x3 OH', rankBy: 'average' },
+  { id: 'clock', name: 'Clock', rankBy: 'average' },
+  { id: 'minx', name: 'Megaminx', rankBy: 'average' },
+  { id: 'pyram', name: 'Pyraminx', rankBy: 'average' },
+  { id: 'skewb', name: 'Skewb', rankBy: 'average' },
+  { id: 'sq1', name: 'Square-1', rankBy: 'average' },
+  { id: '444bf', name: '4x4 BLD', rankBy: 'single' },
+  { id: '555bf', name: '5x5 BLD', rankBy: 'single' },
+  { id: '333mbf', name: 'Multi-Blind', rankBy: 'single' },
+];
+
+/**
+ * Formats time from centiseconds based on event and result type.
+ * @param {number} centiseconds - The raw result value.
+ * @param {string} eventId - The WCA event ID.
+ * @param {('single'|'average')} resultType - Whether this is being formatted for the single or average column.
+ * @returns {string} The formatted time string.
+ */
+const formatTime = (centiseconds, eventId, resultType) => {
+  if (!centiseconds || centiseconds <= 0) return "";
+  
+  // 1. Multi-Blind (333mbf)
+  if (eventId === '333mbf') {
+      const R = centiseconds;
+      const missed = R % 100; 
+      const timeInSeconds = Math.floor(R / 100) % 100000; 
+      const difference = Math.floor(R / 10000000); 
+
+      const mins = Math.floor(timeInSeconds / 60);
+      const secs = timeInSeconds % 60;
+      const timeStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+      const solved = (99 - difference) + missed;
+      const attempted = solved + missed;
+      
+      if (solved < 0 || attempted < 0) return R.toString(); 
+
+      return `${solved}/${attempted} ${timeStr}`;
+  }
+
+  // 2. FMC (333fm) - Apply /100 suffix only for the 'Average' column as requested
+  if (eventId === '333fm') {
+      const moves = centiseconds;
+      if (resultType === 'average') {
+          return (centiseconds / 100).toFixed(2);
+      }
+      // Single result is just the move count
+      return moves.toString();
+  }
+
+  // 3. Standard Time
+  let mins = Math.floor(centiseconds / 6000);
+  let secs = Math.floor((centiseconds % 6000) / 100);
+  let decis = centiseconds % 100;
+
+  let sDecis = decis < 10 ? `0${decis}` : decis;
+  let sSecs = secs < 10 && mins > 0 ? `0${secs}` : secs;
+
+  if (mins > 0) return `${mins}:${sSecs}.${sDecis}`;
+  return `${secs}.${sDecis}`;
+};
+
+export default function App() {
+  const [inputType, setInputType] = useState('url'); // 'text' or 'url'
+  const [inputText, setInputText] = useState('');
+  const [inputUrl, setInputUrl] = useState('https://cubing-tw.net/event/2025TaiwanChampionship/competitors');
+  
+  // New state for selected events configuration
+  const [selectedEventIds, setSelectedEventIds] = useState(EVENTS_DATA.map(e => e.id));
+  
+  const [competitors, setCompetitors] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [fetchingUrl, setFetchingUrl] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [activeTab, setActiveTab] = useState('333');
+  const [errors, setErrors] = useState([]);
+
+  // New state for sorting
+  const [sortKey, setSortKey] = useState(null); // 'single', 'average', or null for default
+  const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
+
+
+  // Derived list of active event objects based on selection order
+  const activeEvents = useMemo(() => {
+    return EVENTS_DATA.filter(e => selectedEventIds.includes(e.id));
+  }, [selectedEventIds]);
+
+  // Ensure active tab is valid when selection changes
+  useEffect(() => {
+    if (activeEvents.length > 0 && !selectedEventIds.includes(activeTab)) {
+      setActiveTab(activeEvents[0].id);
+    }
+  }, [activeEvents, activeTab, selectedEventIds]);
+
+  // Reset sort when the tab changes
+  useEffect(() => {
+    setSortKey(null);
+    setSortDirection('asc');
+  }, [activeTab]);
+
+  const toggleEvent = (id) => {
+    setSelectedEventIds(prev => 
+      prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
+    );
+  };
+
+  const selectAllEvents = () => setSelectedEventIds(EVENTS_DATA.map(e => e.id));
+  const clearAllEvents = () => setSelectedEventIds([]);
+
+  const loadDemo = () => {
+    setInputType('text');
+    // Re-select all events to match demo data
+    selectAllEvents();
+    const demo = `1	Chia-Leo Lin (林珈樂)	2006LINC01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	-	-	✔
+2	Meng Chon Kuok (郭明臻)	2023KUOK01	Macau	女 Female	✔	✔	✔	✔	✔	✔	✔	-	-	✔	-	-	-	-	✔	✔	-
+3	Jerry Chung (鍾養浩)	2017HOJE01	Hong Kong	男 Male	✔	✔	✔	✔	✔	✔	✔	-	✔	✔	✔	✔	✔	-	-	-	-
+4	Ching-Cheng Hsieh (謝京城)	2013HSIE01	Taiwan	男 Male	✔	✔	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-
+5	Yi-Jen Hsueh (薛以仁)	2016HSUE02	Taiwan	男 Male	✔	-	✔	✔	✔	✔	-	-	-	-	✔	-	-	-	-	-	-
+6	Yueh Li (李悅)	2024LIYU02	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	✔	✔	✔	✔	✔	-	-	-	-
+7	Wei-Chun Hung (洪煒鈞)	2022HUNG14	Taiwan	男 Male	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	✔	-	-	-	-
+8	Yan-Hung Lai (賴彥宏)	2009LAIY01	Taiwan	男 Male	✔	✔	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-
+9	Ciao-Yin Yang (楊喬尹)	2015YANG07	Taiwan	女 Female	✔	✔	✔	✔	-	-	-	-	-	-	✔	-	-	-	-	-	-
+10	Yu-Chi Hou (侯宥圻)	2018HOUY01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	-	✔
+11	Pei-Ni Chiang (江霈妮)	2022CHIA01	Taiwan	女 Female	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	-	-	-	-
+12	Brandon Lin (林博浩)	2011LINB01	USA	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔
+13	Mu-Cheng Liu (劉牧承)	2022LIUM02	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	✔	-	-	-	-	-	-	-
+14	Yueh-Lin Tsai (蔡岳霖)	2006TSAI03	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-
+15	Hung-Tsang Chen (陳泓滄)	2021CHEN43	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔
+16	Seung Hyuk Nahm (남승혁)	2013NAHM01	Korea	男 Male	✔	✔	✔	✔	✔	✔	✔	-	✔	-	✔	-	-	✔	-	-	-
+17	Yu-Shi Tzeng (曾瑀希)	2021TZEN01	Taiwan	女 Female	✔	-	✔	✔	✔	✔	-	-	-	✔	✔	-	-	-	-	-	-
+18	Wei-Yuan Hsu (許維元)	2023HSUW01	Taiwan	男 Male	✔	✔	-	-	-	-	✔	✔	-	✔	-	✔	✔	-	-	-	-
+19	Wei-Chen Hsieh (謝維宸)	2019HSIE04	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	-	-	-	-	-	-	-	-
+20	Zong-Xian Yang (楊宗憲)	2018YANG69	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	-	✔	✔	✔	✔	-	-	-	-
+21	Yu-Chen Lin (林昱丞)	2024LINY14	Taiwan	男 Male	✔	✔	✔	-	-	-	-	✔	✔	✔	-	✔	✔	-	-	-	-
+22	Chian-You Shiu (許騫祐)	2015SHIU01	Taiwan	男 Male	✔	✔	-	-	-	-	-	✔	-	-	-	✔	✔	-	-	-	-
+23	Ping-Yueh Huang (黃品越)	2012HUAN12	Taiwan	男 Male	✔	-	✔	✔	✔	✔	✔	-	-	-	-	-	-	-	✔	✔	✔
+24	Tzu-Yang Chang (張子洋)	2022CHAN02	Taiwan	男 Male	✔	-	✔	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-
+25	Ding-Jyun Huang (黃鼎鈞)	2025HUAN30	Taiwan	男 Male	✔	✔	✔	-	-	-	-	-	✔	-	-	✔	✔	✔	-	-	-
+26	Takuma Shirahase (白波瀬拓磨)	2007SHIR01	Japan	男 Male	-	-	-	-	-	-	-	-	-	-	-	-	-	-	✔	✔	✔
+27	Beomseo Jeon (전범서)	2023JEON18	Korea	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔
+28	Chan Tak Chuen (陳德泉)	2007CHUE01	Hong Kong	男 Male	✔	✔	✔	✔	-	-	✔	-	✔	✔	-	-	-	✔	-	-	-
+29	Yen-An Chen (陳彥安)	2019CHEY31	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	-	✔	✔	-	-	✔	-	-	-
+30	Kantaro Sakamoto (坂本貫太郎)	2023SAKA04	Japan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	-	-	-
+31	Shang-Wen Wang (王聖文)	2023WANG35	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	-	-	✔	-	-	-
+32	Jun-Kai Qin (秦俊凱)	2024QINJ01	Taiwan	男 Male	✔	✔	✔	-	-	-	-	-	✔	✔	-	✔	✔	✔	-	-	-
+33	Meng-Sheng Yeng (楊孟晟)	2025YENG02	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	✔	✔	✔	-	✔	✔	-	-	-	-
+34	Ming-Long Kao (高銘隆)	2022KAOM01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	-	✔	✔	✔	✔	-	-	-
+35	Chun-Hao Hsieh (謝鈞浩)	2024HSIE08	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	✔	-	-	✔	✔	-	-	-	-
+36	Yen-Pin Xiao (蕭彥平)	2010XIAO01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	-	-	-
+37	Xiang-En Huang (黃祥恩)	2023HUAN55	Taiwan	男 Male	✔	✔	✔	-	-	-	-	-	-	✔	-	✔	✔	✔	-	-	-
+38	Yu-Chien Jian (簡裕臻)	2025JIAN31	Taiwan	女 Female	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+39	Zi-Qi Lee (李紫祺)	2024LEEZ02	Taiwan	男 Male	✔	✔	✔	-	-	-	-	✔	✔	✔	-	✔	✔	-	-	-	-
+40	Shih-Si Yao (姚詩璽)	2023YAOS03	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	-	-	✔	-	-	-
+41	Yi-Ho Hsueh (薛以和)	2016HSUE01	Taiwan	男 Male	✔	✔	✔	✔	✔	-	-	-	-	-	✔	✔	-	✔	-	-	-
+42	Chun-Ting Liu (劉淳庭)	2013LIUC02	Taiwan	女 Female	✔	-	-	-	-	-	✔	-	-	-	✔	-	-	-	-	-	-
+43	Yi-Hsin Hung (洪以芯)	2023HUNG14	Taiwan	女 Female	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+44	Jihyun Choi (최지현)	2019CHOI10	Korea	女 Female	✔	✔	✔	✔	✔	✔	-	✔	✔	-	✔	✔	✔	-	-	-	-
+45	Ching-Hsiang Li (李清翔)	2016LICH02	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	-	-	-	-	✔	✔	-	-	-
+46	DongSoo Park (박동수)	2017PARK05	Korea	男 Male	✔	✔	✔	✔	✔	✔	-	✔	✔	-	✔	✔	✔	-	-	-	-
+47	Yu-Chun Lee (李佑君)	2023LEEY08	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	-	-	-	✔	-	-	-	-	-
+48	Ting-Yu Liao (廖庭右)	2016LIAO10	Taiwan	男 Male	✔	-	✔	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-
+49	Chih-Yuan Su (蘇致源)	2015SUZH02	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	✔	-	✔	✔	✔	-	-	-	-
+50	Yu-Fang Tseng (曾于芳)	2025TSEN08	Taiwan	女 Female	✔	✔	✔	-	-	-	-	-	-	✔	-	-	-	-	-	-	-
+51	Zirui Wang (王子睿)	2019WANG36	China	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	-	-	-	-
+52	Jun-Rui Rao (饒峻睿)	2015RAOJ01	Taiwan	男 Male	-	-	✔	✔	-	✔	-	-	-	-	-	-	-	-	-	-	-
+53	Yu-Chieh Hsiao (蕭聿杰)		Taiwan	男 Male	-	-	-	-	-	-	-	-	-	✔	-	-	-	-	-	-	-
+54	Chun-Chia Wang (王畯家)	2023WANG58	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	✔	✔	-	✔	-	-	-	-	-
+55	Cheng-Yu Tsai (蔡承佑)	2024TSAI02	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	✔	✔	✔	✔	✔	✔	✔	-	-	-
+56	Hao-Ting Lee (李浩霆)	2025LEEH10	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+57	Ting-Huan Hsieh (謝定桓)	2019HSIE01	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+58	Jen-Shuo Liu (劉人碩)	2025LIUJ13	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	-	✔	-	✔	✔	-	-	-	-
+59	Zac Chung	2025CHUN09	Australia	男 Male	✔	✔	✔	✔	-	-	-	-	✔	✔	-	✔	✔	-	-	-	-
+60	Kuo-Hau Wu (吳國豪)	2008WUKU01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	-	✔	-	-	-	-	-	-	-	-
+61	Yung-Jen Szu (司永任)	2022SZUY01	Taiwan	男 Male	✔	✔	-	-	-	-	-	✔	-	✔	-	✔	✔	-	-	-	-
+62	En-Tzu Lin (林恩慈)	2019LINE02	Taiwan	女 Female	✔	✔	✔	✔	✔	-	-	-	-	✔	-	✔	-	-	-	-	-
+63	Chuan-Hsien Chen (陳傳憲)	2025CHEC13	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+64	Sheng-Wen Wang (王聖文)	2010WANG56	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-
+65	Hong-An Lai (賴泓安)	2018LAIH01	Taiwan	男 Male	✔	-	✔	✔	-	✔	-	✔	-	-	-	-	✔	-	-	-	-
+66	Wang Junwen (王俊文)	2009JUNW01	Malaysia	男 Male	✔	✔	✔	-	-	-	-	-	-	✔	-	-	✔	-	-	-	-
+67	He-Ping Zheng (鄭和平)	2015ZHEN20	Taiwan	男 Male	✔	-	✔	✔	✔	✔	-	-	✔	-	-	-	-	-	-	-	-
+68	Tsang Hon Pong (曾漢邦)	2014PONG01	Hong Kong	男 Male	✔	✔	✔	✔	-	-	-	✔	✔	-	✔	-	-	-	-	-	-
+69	Hao-Siang Yang (楊皓翔)	2025YANG85	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	✔	✔	-	-	-	-
+70	Yu-Chun Yeh (葉昱均)	2023YEHY01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	-	-	-
+71	Kai-Chi Huang (黃楷齊)	2025HUAN47	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+72	SeungWoon Lee (이승운)	2006SEUN02	Korea	男 Male	✔	✔	✔	✔	✔	✔	✔	-	✔	✔	✔	-	-	✔	-	-	-
+73	Shao-Heng Hung (洪紹恆)	2011HUNG02	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	✔	-	✔	✔	✔	✔	✔	-	-	-
+74	Cai-Jei Lin (林采潔)	2023LINC11	Taiwan	女 Female	✔	✔	✔	✔	-	-	-	-	✔	✔	✔	✔	✔	-	-	-	-
+75	Shek Ho Hin (石灝軒)	2016HINS02	Hong Kong	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔
+76	Hsiang-Cheng Kan (闞祥誠)	2016KANH02	Taiwan	男 Male	-	-	-	-	-	-	-	✔	✔	-	-	-	-	-	-	-	-
+77	Chi-Lun Hung (洪啟倫)	2010HONG01	Taiwan	男 Male	✔	✔	✔	-	-	-	-	✔	✔	✔	-	-	-	-	-	-	-
+78	Guan-Jun Huang (黃冠鈞)	2025HUAN81	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	✔	✔	-	-	-	-
+79	Wu Li (李悟)	2023LIWU01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	-	-	-
+80	Ko Youngjin (고영진)	2007YOUN04	Korea	男 Male	✔	✔	✔	✔	✔	-	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔
+81	Ruei-Lin Pu (卜睿霖)	2024PURU04	Taiwan	男 Male	✔	✔	✔	-	-	-	-	-	✔	-	-	✔	-	-	-	-	-
+82	Shoi Hamaguchi (濱口翔偉)	2023HAMA03	Japan	男 Male	-	-	-	-	-	-	-	-	-	✔	✔	-	-	-	-	-	-
+83	Shao-Yu Hu (胡紹宇)	2015HUSH02	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	-	✔	-	✔	✔	✔	✔	-	-	-
+84	Ji-Siang Jian (簡季湘)	2021JIAN09	Taiwan	女 Female	✔	-	-	✔	✔	✔	-	-	✔	✔	-	-	-	✔	-	-	-
+85	Yi-Huang Wu (吳亦凰)		Taiwan	女 Female	✔	✔	-	✔	-	-	-	-	-	-	-	✔	-	-	-	-	-
+86	Chen-Hsiu Wu (吳承修)	2023WUCH03	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+87	Chung-Yao Chiang (江仲堯)	2015CHIA05	Taiwan	男 Male	✔	✔	✔	✔	-	-	✔	✔	✔	✔	-	✔	✔	-	-	-	-
+88	Amey Gaba	2016GABA02	India	男 Male	✔	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-
+89	Yu-Lun Huang (黃于倫)	2023HUAN31	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	-	-	-
+90	Rui-Jun Liu (劉睿鈞)	2011LIUR02	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	✔	✔	-	-	✔	-	✔	-	-	-
+91	Chan Hay Yin (陳希言)	2015YINC01	Hong Kong	男 Male	✔	✔	✔	✔	✔	✔	✔	-	✔	✔	✔	✔	✔	✔	-	✔	-
+92	Lim Jia Ying	2022YING02	Singapore	女 Female	✔	✔	✔	-	-	-	-	-	-	✔	-	✔	-	-	-	-	-
+93	Yu-Hsuan Chang (張祐瑄)	2013CHAN09	Taiwan	男 Male	✔	✔	-	-	-	-	✔	-	✔	✔	-	✔	✔	✔	-	-	-
+94	Yu-Wei Su (蘇昱維)	2025SUYU01	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+95	Liu Yik Yung (劉益融)	2023YUNG02	Hong Kong	男 Male	✔	✔	✔	✔	✔	-	-	-	✔	✔	-	-	✔	✔	-	-	-
+96	Wei-Hong Gao (高維鴻)	2023GAOW01	Taiwan	男 Male	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+97	Zong-Xing Yang (楊宗興)	2018YANG70	Taiwan	男 Male	✔	✔	✔	✔	✔	-	-	-	✔	✔	✔	✔	✔	✔	-	-	-
+98	Dylan Zamora (葉銘倫)	2023ZAMO10	USA	男 Male	✔	✔	✔	✔	-	-	-	-	✔	-	-	-	-	-	-	-	-
+99	Yu-Chin Lee (李侑縉)	2023LEEY06	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	✔	✔	✔	-	-	-	-	-
+100	Tomohiro Kobayashi (小林知広)	2013KOBA01	Japan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	-	-	✔	-	-	-	✔	✔	✔
+101	Rui Yu (余睿)	2019YURU02	Taiwan	男 Male	✔	-	✔	✔	✔	✔	-	-	✔	-	-	-	✔	-	-	-	-
+102	Yuan-Jyun Shih (施元鈞)	2017SHIH04	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	✔	-	✔	-	-	-	-	-	-
+103	Chen-Kuang Chiu (邱晨光)	2018CHIU02	Taiwan	男 Male	✔	-	-	✔	-	-	-	-	-	-	-	-	-	-	-	-	-
+104	Jason Chang (章維祐)	2023CHAN15	USA	男 Male	✔	✔	-	✔	✔	✔	-	-	-	✔	-	✔	-	-	-	-	-
+105	Hung-Wei Liu (劉紘爲)	2022LIUH02	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+106	Yi-Fei Chen (陳儀菲)	2023CHEN93	Taiwan	女 Female	✔	✔	✔	-	-	-	-	-	✔	-	-	-	-	-	-	-	-
+107	Chia-Chun Chang (張嘉隽)	2025CHAN74	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+108	Chun-Pao Ni (倪君寶)	2016NIJU01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	✔	✔	✔	✔	✔	✔	✔	-	-	-
+109	Wayne Pi	2017PIWA01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔
+110	Gilbert Chen (陳牧灼)	2021CHEN64	Taiwan	男 Male	✔	-	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-
+111	Ding-Shuo Li (李定碩)	2025LIDI01	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+112	Wong Pat Lun (黃柏綸)	2023LUNW01	Hong Kong	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	-	-	-
+113	Takumi Kato (加藤匠)	2023KATO03	Japan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	-	-	-
+114	Hao-Jyun Kang (康皓鈞)	2022KANG06	Taiwan	男 Male	✔	-	✔	✔	✔	✔	-	-	✔	-	✔	-	-	✔	-	-	-
+115	Ping-Hsien Yang (楊秉憲)	2024YANG29	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	✔	✔	-	-	-	-
+116	Chih-Yu Cheng (鄭植宇)	2024CHEC08	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+117	Bo-Yi Liu (劉柏沂)	2025LIUB05	Taiwan	男 Male	-	-	-	-	-	-	-	-	-	✔	-	-	-	-	-	-	-
+118	Masayuki Hirai (平井雅之)	2014HIRA05	Japan	男 Male	✔	✔	✔	✔	✔	✔	✔	-	-	-	✔	-	✔	-	-	-	-
+119	Shun-Hsin Chang (張舜欣)	2011JHAN01	Taiwan	女 Female	✔	-	✔	✔	-	-	✔	-	-	-	✔	-	-	-	✔	✔	✔
+120	You-Jyun Li (李侑駿)		Taiwan	男 Male	-	-	-	-	-	-	-	-	-	-	-	✔	-	-	-	-	-
+121	Isaac Chung	2025CHUN08	Australia	男 Male	✔	✔	✔	-	-	-	-	-	-	✔	-	✔	✔	-	-	-	-
+122	Shan-I Yang (楊善衣)	2025YANG87	Taiwan	女 Female	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+123	Ding-Rong Chan (詹定融)	2025CHAN42	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+124	Po-Ling Lin (林柏伶)	2019LINP03	Taiwan	女 Female	✔	-	✔	✔	-	-	✔	-	-	✔	✔	-	-	-	-	-	✔
+125	Cheng-Yuan Liu (劉承沅)		Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+126	Htet Wai Yan	2023YANH02	Myanmar	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	✔	-	-	-	-
+127	Kai-Hsing Chang (鄭愷行)	2024CHAN89	Taiwan	男 Male	✔	-	-	-	-	-	-	✔	-	-	-	✔	-	-	-	-	-
+128	Yan-Jie Peng (彭彥捷)	2024PENG13	Taiwan	男 Male	✔	✔	✔	-	-	-	-	-	✔	-	-	-	-	-	-	-	-
+129	Dong-Lin Lee (李東臨)	2024LEED10	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	✔	-	-	-	-	-
+130	Szu-Kai Huang (黃思凱)	2023HUAN54	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+131	Chun-Mu Yeh (葉君牧)	2025YEHC01	Taiwan	男 Male	✔	-	✔	-	-	-	-	-	✔	-	-	-	✔	-	-	-	-
+132	Yan-Hua Wang (王言華)	2025WANY08	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	✔	✔	-	-	-	-
+133	Cheng-Yi Zheng (鄭丞宜)	2023ZHEN30	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	✔	✔	-	-	✔	✔	-	-	-	-
+134	Li Shang Cheng (李尚澄)	2024LISH03	Hong Kong	女 Female	✔	✔	✔	✔	-	-	-	-	✔	✔	✔	✔	✔	✔	-	-	-
+135	Tzu-An Liu (劉梓安)	2022LIUT02	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+136	Jia-Ying Ho (何佳頴)	2020HOJI01	Taiwan	女 Female	✔	-	✔	✔	-	-	-	-	✔	✔	-	-	✔	-	-	-	-
+137	Jia-Hong Lu (陸嘉宏)	2007LUJI01	Taiwan	男 Male	✔	✔	✔	✔	-	-	✔	-	-	-	-	-	-	-	✔	✔	-
+138	Sheng-Jie Fu (傅聖傑)	2019FUSH01	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-
+139	Tian-Sin Yang (楊天心)	2016YANG20	Taiwan	女 Female	✔	✔	✔	✔	✔	-	✔	-	✔	-	✔	-	-	-	-	-	✔
+140	Yu-Chen Lee (李宇晨)		Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+141	Yong-Teng Chen (陳永騰)	2023CHEY16	Taiwan	男 Male	✔	✔	✔	-	-	-	-	-	✔	-	-	-	-	✔	-	-	-
+142	Kai-Jie Wu (吳楷傑)	2024WUKA02	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	✔	✔	✔	✔	-	-	-	-	-	-
+143	Hong Yang (楊弘)	2022YANG18	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	✔	✔	-	-	-	-	-	-	-
+144	Yu-Wen Lin (林煜文)	2019LINY12	Taiwan	男 Male	✔	-	-	-	-	-	✔	-	-	-	-	-	-	-	-	-	-
+145	Fang-Ru Yu (余芳儒)	2023YUFA01	Taiwan	女 Female	✔	✔	✔	✔	-	-	✔	✔	-	-	✔	✔	✔	-	-	-	✔
+146	Sing-Hao Lian (連星皓)	2024LIAN11	Taiwan	男 Male	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	-	-	-	-
+147	Tzu-Heng Lin (林子恆)	2010LINT01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	-	✔	✔	-	✔	✔	✔
+148	Yi-An Hung (洪以安)	2022HUNG18	Taiwan	女 Female	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+149	Ping-Chi Yang (楊秉錡)	2024YANG51	Taiwan	男 Male	✔	✔	✔	-	-	-	-	✔	✔	-	-	✔	-	-	-	-	-
+150	Yi-Hsin Chou (周奕昕)	2025CHOU04	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+151	Lukas Li Yin San (李彥辰)	2023SANL03	Hong Kong	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+152	Ting-Xian Lin (林廷縣)	2011LINJ04	Taiwan	男 Male	✔	-	✔	-	-	-	-	-	✔	-	✔	-	-	-	-	-	-
+153	Shiou-Shiou Chuang (莊琇琇)	2020CHUA02	Taiwan	女 Female	✔	✔	-	-	-	-	-	-	-	-	-	✔	✔	-	-	-	-
+154	Chao-Che Chung (鍾肇哲)	2012CHON03	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔
+155	Cheng Yang (楊誠)	2023YANG53	Taiwan	男 Male	✔	✔	✔	✔	✔	-	-	-	✔	-	-	-	-	-	-	-	-
+156	Dylan Seah Tze Siang (谢智翔)	2015SIAN01	Singapore	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	-	-	✔
+157	Tien-Hao Chu (鞠天浩)	2024CHUT02	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+158	Chia-Yen Tu (杜佳姸)	2023TUCH01	Taiwan	女 Female	✔	✔	-	-	-	-	-	-	-	✔	-	✔	✔	-	-	-	-
+159	Hsing-Kai Hsiung (熊星凱)	2024HSIU01	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	✔	✔	✔	✔	-	-	-	-	-
+160	Chao-Yu Wang (王朝羽)	2025WANG78	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	✔	-	✔	✔	✔	-	-	-	-
+161	Hsin-Ju Wang (王心汝)	2025WANH02	Taiwan	女 Female	✔	✔	-	-	-	-	-	-	-	-	-	✔	-	-	-	-	-
+162	Yu-Shen Zhang (張昱紳)	2025ZHAY03	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	-	-	-
+163	Kai-Wen Wang (王楷文)	2015WANG09	Taiwan	男 Male	✔	-	✔	✔	✔	✔	✔	-	✔	-	✔	-	✔	-	-	-	-
+164	Kuan-Ying Li (李冠穎)	2009LIKU01	Taiwan	男 Male	✔	✔	✔	✔	-	-	✔	-	-	✔	✔	✔	✔	-	✔	✔	✔
+165	Yu-Chen Wang (王宇辰)		Taiwan	男 Male	-	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+166	Hobart Huang (黃禾)	2025HUAN68	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	✔	-	-	-	-	-
+167	Jau-Shiun Huang (黃昭勳)	2024HUAN34	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	-	-	✔	✔	✔	-	-	-	-
+168	Yi-Hsuan Chen (陳翌玄)	2025CHEN98	Taiwan	男 Male	✔	✔	✔	-	-	-	-	-	-	✔	-	✔	✔	-	-	-	-
+169	Yu-Chih Chuang (莊雨直)	2023CHUA06	Taiwan	男 Male	✔	-	✔	✔	✔	-	-	-	-	-	✔	✔	-	✔	-	-	-
+170	Johnny Li Chung Kik (李宗極)	2024KIKJ01	Hong Kong	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+171	Cheng-Yu Hsieh (謝承諭)	2014HSIE01	Taiwan	男 Male	✔	✔	-	✔	-	-	✔	-	-	-	-	✔	✔	✔	-	-	-
+172	Carmen Teo Bin Jie (张斌婕)	2012JIET01	Singapore	女 Female	✔	-	-	✔	✔	✔	-	-	✔	-	-	-	✔	-	-	-	-
+173	Bo-Yan Wu (吳柏彥)	2019WUBO01	Taiwan	男 Male	-	-	-	-	-	-	-	-	-	-	✔	✔	-	-	-	-	-
+174	Xin-Hui Huang (黃歆惠)	2023HUAN22	Taiwan	女 Female	✔	-	✔	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-
+175	Ya-Xuan Wu (吳亞璇)		Taiwan	女 Female	-	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+176	Chih-Wei Chan (詹志偉)	2025CHAN41	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+177	Tzu-Ang Wang (王子昂)	2019WANT06	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	✔	-	-	-	✔	-	-	-	-
+178	Glen Goh Wee Zhuan (吴洧全)	2015ZHUA01	Singapore	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔
+179	Kai-Chen Bai (白鍇辰)		Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+180	Cheng-Ze Lin (林承澤)	2025LINC12	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+181	Li-Syuan Liang (梁立璿)	2024LIAN14	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+182	Xiang-Yu Wu (吳享諭)	2019WUXI04	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	-	-	-	✔	-	-	-	-	-
+183	Yu-Ju Wu (吳宥儒)	2024WUYU04	Taiwan	男 Male	✔	✔	✔	-	-	-	-	✔	✔	✔	-	✔	-	-	-	-	-
+184	Kai-En Wu (吳凱恩)	2024WUKA01	Taiwan	男 Male	✔	✔	✔	✔	✔	-	-	-	✔	✔	✔	✔	-	-	-	-	-
+185	Wei-Yuan Li (李維元)	2022LIWE01	Taiwan	男 Male	✔	-	✔	✔	-	-	-	-	-	-	✔	-	-	-	-	-	-
+186	Guan-Ting Wu (吳冠廷)	2021WUGU01	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	✔	-	-	✔	-	-	-	-	-
+187	Chan Sai Chong (陳世聰)	2018CHON01	Macau	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	-	-	-
+188	Wei-Hao Wang (王威皓)	2021WANG71	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	✔	-	-	-	-	-	-	-	-	-
+189	MinGwan Yeo (여민관)	2018MING07	Korea	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	-	✔	✔	-	✔	-	-	-
+190	Jie-Min Huang (黃杰敏)	2025HUAN31	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	✔	-	-	-	-	-	-	-
+191	Chin-Shuan Wang (王至玄)	2018WANC17	Taiwan	男 Male	✔	✔	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-
+192	Yi-Xiang Liao (廖奕翔)	2023LIAO05	Taiwan	男 Male	✔	✔	✔	-	-	-	✔	-	✔	-	-	✔	✔	-	-	-	-
+193	Fung Hoi Yin (馮凱賢)	2010YINF01	Hong Kong	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	-	-	-	-	-	-	-	-
+194	Chih-Hsiang Yang (楊志翔)	2023YANG22	Taiwan	男 Male	✔	-	✔	✔	✔	✔	-	-	-	-	✔	-	-	-	-	-	-
+195	Hao-Pin Hsu (許皓品)	2025HSUH02	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	✔	-	✔	✔	✔	-	-	-	-
+196	Wei-Chieh Hung (洪偉傑)	2022HUNG17	Taiwan	男 Male	✔	-	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+197	Yen-Chun Hua (華彥鈞)	2018HUAY03	Taiwan	男 Male	-	-	-	-	✔	✔	-	-	-	-	-	-	-	-	-	-	-
+198	Sheng-Fan Tsai (蔡勝帆)	2022TSAI02	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	-	✔	✔	✔	✔	✔	-	-	-
+199	Yu-You Guo (郭昱佑)	2022GUOY01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	-	-	✔	-	-	-	-	-
+200	Shu Ogawa (小川柊)	2020OGAW01	Japan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	-	-	-
+201	You-He Yang (楊右禾)	2025YANG30	Taiwan	男 Male	✔	✔	✔	-	-	-	-	-	✔	-	-	✔	✔	-	-	-	-
+202	Chen-Ze Wang (王臣擇)	2023WANG57	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	✔	✔	-	-	✔	-	-	-	-	-
+203	Yi-Che Lee (李奕澈)	2024LEEY09	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+204	Albert So Yik Ban (蘇益品)	2022SOAL01	Hong Kong	男 Male	✔	✔	✔	✔	-	-	-	✔	✔	-	-	✔	✔	-	-	-	-
+205	Yu-An Dai (戴昱安)	2024DAIY02	Taiwan	男 Male	✔	✔	✔	✔	✔	-	-	✔	✔	✔	-	✔	✔	✔	-	-	-
+206	Tsai-Ying Lee (李采盈)	2022LEET04	Taiwan	女 Female	-	-	-	-	-	✔	-	✔	-	-	-	-	-	-	-	-	-
+207	Zih-Siang Huang (黃子翔)	2020HUAN11	Taiwan	男 Male	-	-	-	-	✔	✔	-	-	-	✔	✔	-	-	✔	-	-	-
+208	Guo-Wei Lee (李國蔚)	2025LEEG01	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	✔	-	-	-	-	-	-	-	-
+209	Zi-Xian Liao (廖子賢)	2012LIAO03	Taiwan	男 Male	✔	-	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-
+210	DaYeong Kim (김다영)	2016KIMD05	Korea	女 Female	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	✔	✔	-	-	✔
+211	Tzi-Yu Ho (何子譽)	2025HOTZ01	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	✔	-	✔	✔	✔	-	-	-
+212	Kai-Le Chang (張楷樂)		Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	-	-	✔	-	-	-	-	-	-
+213	De-Yuan Meng (孟德元)	2023MENG05	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	✔	✔	-	✔	✔	-	-	-	-
+214	Andy Mok Man Cheuk (莫文卓)	2016CHEU04	Hong Kong	男 Male	✔	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	✔	-
+215	Bo-Yan Chen (陳柏諺)	2023CHEB04	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	✔	✔	✔	✔	✔	✔	-	-	-	-
+216	Chuan-Chen Ho (何權宸)	2019HOCH04	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	-	-	-
+217	Jia-Rui Kang (康家睿)	2023KANG26	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+218	Casper Chuanyu Li (李權祐)	2023LICA02	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+219	Zhi-Chen Cai (蔡智丞)	2021CAIZ03	Taiwan	男 Male	✔	✔	✔	✔	✔	-	-	✔	✔	-	-	✔	-	-	-	-	-
+220	Ding-Hong Ke (柯定紘)	2022KEDI03	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	-	-	-
+221	Wei-Ming Zeng (曾唯銘)	2019ZENG10	Taiwan	男 Male	✔	-	✔	✔	✔	✔	-	-	✔	-	-	✔	✔	-	-	-	-
+222	Pin-He Pan (潘品赫)	2024PANP01	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+223	Ryan Peh (白凯明)	2015PEHR01	Singapore	男 Male	✔	✔	✔	✔	-	✔	-	-	✔	-	-	-	-	-	-	-	-
+224	Chou-Hsuan Li (李宙軒)	2019LICH21	Taiwan	男 Male	✔	✔	-	✔	-	-	-	✔	-	✔	-	✔	✔	✔	-	-	-
+225	Ivan Li Ka Leong (李嘉亮)	2015LEON02	Hong Kong	男 Male	✔	-	✔	✔	✔	✔	-	-	✔	-	✔	-	-	-	-	-	-
+226	Xing-Fei Yang (楊行飛)	2024YANG48	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	✔	✔	-	✔	-	✔	-	-	-
+227	Yu-Chien Hsu (徐友謙)	2025HSUY02	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+228	Yi-En Tsai (蔡以恩)	2022TSAI08	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	-	✔	✔	✔	✔	✔	✔	-	-	-
+229	Haruka Kitamura (北村晴香)	2017KITA03	Japan	女 Female	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔
+230	Yi-Jie Wang (王奕絜)		Taiwan	女 Female	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+231	I-Jan Ho (何一然)	2023HOIJ01	Taiwan	女 Female	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+232	Ting-Huei Yang (楊婷卉)	2024YANG74	Taiwan	女 Female	✔	✔	✔	✔	-	-	-	✔	-	✔	✔	✔	✔	-	-	-	-
+233	Jesse Fay (費聿安)	2023FAYJ01	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	-	-	-	✔	✔	-	-	-	-
+234	Yen-Ling Chen (陳妍伶)		Taiwan	女 Female	✔	✔	-	-	-	-	-	✔	-	-	-	-	-	-	-	-	-
+235	Shao-Fan Huang (黃少凡)	2024HUAS02	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+236	Joy Wee	2022WEEJ01	Singapore	女 Female	✔	-	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-
+237	Yao-Teng Yang (楊曜騰)	2025YANG88	Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+238	En-Yu Sun (孫恩禹)		Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+239	Huan-Ruei Liang (梁洹睿)		Taiwan	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+240	Cheng-Shiuan Tsai (蔡承軒)	2025TSAI08	Taiwan	男 Male	✔	✔	-	-	-	-	✔	-	✔	✔	-	✔	✔	-	-	-	✔
+241	Wei-En Yu (余惟恩)	2025YUWE02	Taiwan	男 Male	✔	✔	✔	-	-	-	-	✔	✔	✔	-	✔	✔	-	-	-	-
+242	Ng Jia Quan (黄佳铨)	2015QUAN03	Malaysia	男 Male	✔	✔	✔	✔	✔	✔	✔	-	✔	✔	✔	✔	✔	✔	-	-	-
+243	Yu-Kai Sun (孫堉塏)	2025SUNY05	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	✔	-	-	-	-	-	-	-	-
+244	Cian-Jyun Yang (楊謙君)	2019YANG94	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔
+245	Jie-Yu Xie (謝傑宇)	2019XIEJ05	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	-	-	-
+246	Jing-Wei Yang (楊靖威)	2023YANG57	Taiwan	男 Male	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+247	Ching-Yuan Cheng (鄭景淵)	2023CHEN82	Taiwan	男 Male	✔	✔	✔	✔	✔	-	-	-	✔	✔	✔	✔	✔	✔	-	-	-
+248	Chien-Ming Chen (陳建銘)	2021CHEN63	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	✔	-	-	-	-	-
+249	Eng Dickson (黄迪胜)	2016DICK03	Malaysia	男 Male	✔	✔	-	-	-	-	✔	✔	✔	-	-	-	✔	-	-	-	-
+250	Chia-Hung Liao (廖嘉宏)	2025LIAO09	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+251	Leung Yu Ching (梁宇正)	2008CHIN01	Hong Kong	男 Male	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+252	Wen-Lu Chen (陳文律)	2024CHEN05	Taiwan	女 Female	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+253	LJ Chang	2024CHAN43	USA	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+254	Min-Syuan Yu (游簢嫙)		Taiwan	女 Female	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-
+255	Yi-Le Chen (陳倚樂)	2024CHEY06	Taiwan	男 Male	✔	✔	-	-	-	-	-	-	-	-	-	✔	-	-	-	-	-
+256	Shi-Hsuan Lee (李適軒)	2024LEES19	Taiwan	男 Male	✔	✔	✔	-	-	-	-	-	✔	-	-	-	-	-	-	-	-
+257	Yung-Chun Tsai (蔡詠竣)	2018TSAI03	Taiwan	男 Male	✔	✔	✔	-	-	-	-	✔	✔	✔	-	-	-	-	-	-	-
+258	Wei-Zhong Wang (王為中)	2024WANW03	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	✔	✔	✔	✔	✔	✔	✔	-	-	-
+259	Kai-Xuan Lin (林楷軒)	2021LINK02	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	-	✔	✔	✔	✔	-	-	-
+260	Yi-Chen Lee (李奕澄)	2024LEEY10	Taiwan	男 Male	✔	✔	✔	✔	✔	-	-	-	✔	-	-	-	-	-	-	-	-
+261	Chen-Rui Yu (余晨睿)	2024YUCH04	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	-	-	-	-
+262	Pei-Yu Ko (柯沛羽)	2014KOPE01	Taiwan	女 Female	✔	-	-	-	-	-	-	-	-	✔	-	✔	✔	-	-	-	-
+263	Po-Hsien Lai (賴柏憲)	2022LAIP01	Taiwan	男 Male	-	-	✔	✔	✔	-	-	-	✔	-	-	-	-	-	-	-	-
+264	Yu-Fang Liu (劉語芳)	2016LIUY05	Taiwan	女 Female	✔	✔	-	-	-	-	✔	✔	✔	-	-	-	✔	✔	-	-	-
+265	Yen-Lei Jen (任晏磊)	2023JENY01	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	✔	✔	-	✔	✔	✔	-	-	-	-
+266	Nice Yoshida (吉田名偉主)	2024YOSH02	Japan	男 Male	✔	✔	✔	-	-	-	-	✔	✔	✔	✔	✔	✔	✔	-	-	-
+267	Jui-Hung Liu (劉睿紘)	2022LIUJ03	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	-	-	✔	✔	-	-	-	-
+268	Hua-Ting Lee (李華庭)	2013LIHU01	Taiwan	女 Female	✔	-	✔	✔	-	-	✔	-	✔	-	✔	-	-	-	-	-	-
+269	Cheng-Hua Wu (巫政樺)	2015WUCH01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	-	✔	-	-	-	-	-	-	-	-
+270	Xiang-Fu Tian (田翔富)	2016TIAN04	Taiwan	男 Male	✔	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-	-
+271	Ivan Lew Yi Wen (刘义文)	2012WENI01	Malaysia	男 Male	✔	✔	✔	✔	✔	✔	-	-	✔	✔	✔	✔	✔	-	-	-	-
+272	Yusuke Takada (高田祐介)	2015TAKA05	Japan	男 Male	✔	✔	✔	✔	✔	✔	-	-	-	-	✔	-	-	-	-	-	-
+273	Chan Ho Hin (陳𣉞軒)	2023HINC04	Hong Kong	男 Male	✔	✔	✔	✔	-	-	✔	-	-	✔	-	✔	✔	-	-	-	-
+274	Chih-Chuan Yang (楊智全)	2018YANG92	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	-	✔	-	-	-	-	-	-	✔	✔
+275	Shih-Hao Wang (王士豪)	2015WANG46	Taiwan	男 Male	✔	-	✔	✔	✔	✔	-	✔	✔	-	-	-	-	✔	-	-	-`;
+    setInputText(demo);
+  };
+
+  const fetchFromUrl = async () => {
+    if (!inputUrl) return;
+    setFetchingUrl(true);
+    setErrors([]);
+
+    try {
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(inputUrl)}`;
+        const response = await fetch(proxyUrl);
+        const data = await response.json();
+        
+        if (!data.contents) throw new Error("No content received from proxy.");
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(data.contents, 'text/html');
+        
+        const rows = doc.querySelectorAll('tr');
+        let extractedText = "";
+
+        rows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll('td, th'));
+            if (cells.length > 0) {
+                const rowText = cells.map(cell => cell.innerText.trim()).join('\t');
+                extractedText += rowText + '\n';
+            }
+        });
+
+        if (extractedText.length < 50) {
+            throw new Error("Could not find a valid table in the fetched URL.");
+        }
+
+        setInputType('text');
+        setInputText(extractedText);
+        
+        // Slight delay to allow state update before parsing
+        setTimeout(() => parseInput(extractedText), 100);
+
+    } catch (err) {
+        setErrors([`Failed to fetch from URL: ${err.message}. Try copy-pasting manually.`]);
+    } finally {
+        setFetchingUrl(false);
+    }
+  };
+
+  const parseInput = (textToParse = inputText) => {
+    if (activeEvents.length === 0) {
+        setErrors(["Please select at least one event in the configuration above."]);
+        return;
+    }
+
+    const lines = textToParse.split('\n').filter(line => line.trim() !== '');
+    const parsed = [];
+    const parseErrors = [];
+    
+    // Dynamic regex based on number of selected events
+    // We look for N occurrences of checkmarks/dashes
+    const expectedColumns = activeEvents.length;
+    const eventColumnsRegex = new RegExp(`([✔✓\\-]\\s*){${expectedColumns}}`);
+
+    lines.forEach((line, index) => {
+      // Regex to find WCA ID: 4 digits, 4 letters, 2 digits
+      const wcaIdMatch = line.match(/(\d{4}[A-Z]{4}\d{2})/);
+      
+      if (wcaIdMatch) {
+        const wcaId = wcaIdMatch[0];
+        
+        const namePart = line.substring(0, line.indexOf(wcaId)).trim();
+        const cleanName = namePart.replace(/^\d+\s*/, '').trim();
+        const rest = line.substring(line.indexOf(wcaId) + wcaId.length);
+        
+        const eventMarkersMatch = rest.match(eventColumnsRegex);
+        
+        if (eventMarkersMatch) {
+            const markerString = eventMarkersMatch[0];
+            const userEvents = markerString.match(/[✔✓\-]/g);
+            
+            // Map the found columns to the currently active events
+            const eventsRegistered = {};
+            activeEvents.forEach((ev, i) => {
+                if (userEvents && userEvents[i]) {
+                    eventsRegistered[ev.id] = userEvents[i] === '✔' || userEvents[i] === '✓';
+                }
+            });
+
+            // Rough heuristic for country
+            const preamble = rest.substring(0, rest.indexOf(markerString)).trim();
+            const preambleTokens = preamble.split(/\s+/).filter(t => t.length > 0);
+            const countryGuess = preambleTokens[0] || 'Unknown';
+
+            parsed.push({
+                name: cleanName,
+                wcaId: wcaId,
+                events: eventsRegistered,
+                ranks: { singles: {}, averages: {} }, 
+                country: countryGuess 
+            });
+        } else {
+             parseErrors.push(`Line ${index + 1}: Found ID ${wcaId} but couldn't find ${expectedColumns} event columns.`);
+        }
+      }
+    });
+
+    if (parsed.length === 0) {
+        if (!textToParse.trim()) return; 
+        setErrors([`No valid competitors found. Make sure the number of event columns in the text matches your selection (${expectedColumns} events).`]);
+        return;
+    }
+
+    setCompetitors(parsed);
+    setErrors(parseErrors);
+    fetchData(parsed);
+  };
+
+  const fetchData = async (competitorList) => {
+    setLoading(true);
+    setProgress(0);
+    const results = [...competitorList];
+    const total = results.length;
+    let completed = 0;
+
+    const BATCH_SIZE = 5;
+    
+    const fetchWithRetry = async (url, retries = 3) => {
+        for (let i = 0; i < retries; i++) {
+            try {
+                const response = await fetch(url);
+                if (response.ok) return await response.json();
+                if (response.status === 404) return null; 
+                if (i < retries - 1) {
+                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                } else {
+                    throw new Error(`Failed after ${retries} retries`);
+                }
+            } catch (err) {
+                if (i === retries - 1) throw err;
+            }
+        }
+    };
+
+    const processBatch = async (batch) => {
+        const promises = batch.map(async (comp) => {
+            try {
+                const data = await fetchWithRetry(`https://raw.githubusercontent.com/robiningelbrecht/wca-rest-api/master/api/persons/${comp.wcaId}.json`);
+                
+                if (data && data.rank) {
+                    // Store singles and averages
+                    if (data.rank.singles) {
+                        data.rank.singles.forEach(r => {
+                            comp.ranks.singles[r.eventId] = r.best;
+                        });
+                    }
+                    if (data.rank.averages) {
+                        data.rank.averages.forEach(r => {
+                            comp.ranks.averages[r.eventId] = r.best;
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error(`Error fetching ${comp.wcaId}:`, error);
+            } finally {
+                completed++;
+                setProgress(Math.round((completed / total) * 100));
+            }
+        });
+        await Promise.all(promises);
+    };
+
+    for (let i = 0; i < results.length; i += BATCH_SIZE) {
+        const batch = results.slice(i, i + BATCH_SIZE);
+        await processBatch(batch);
+    }
+
+    setCompetitors(results);
+    setLoading(false);
+  };
+  
+  // Function to handle header click for sorting
+  const handleSort = (key) => {
+      // If clicking the currently sorted key, reverse direction
+      if (sortKey === key) {
+          setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+      } else {
+          // If clicking a new key, set it and default to ascending (lower is better for time)
+          setSortKey(key);
+          setSortDirection('asc'); 
+      }
+  };
+
+
+  // Sorting logic for table
+  const sortedCompetitors = useMemo(() => {
+    const activeEvent = activeEvents.find(e => e.id === activeTab);
+    if (!activeEvent) return competitors;
+
+    // Determine the column to sort by: user choice (sortKey) overrides event default (rankBy)
+    let currentSortKey = sortKey;
+    if (currentSortKey === null) {
+        currentSortKey = activeEvent.rankBy === 'average' ? 'average' : 'single';
+    }
+    
+    const rankType = currentSortKey === 'average' ? 'averages' : 'singles';
+    const direction = sortDirection;
+
+    return [...competitors]
+        .filter(c => c.events[activeTab]) // Only show registered
+        .sort((a, b) => {
+            const resA = a.ranks[rankType][activeTab];
+            const resB = b.ranks[rankType][activeTab];
+
+            // Handle no results (Infinity for asc sort)
+            const valA = resA ? resA : Infinity;
+            const valB = resB ? resB : Infinity;
+
+            let comparison = valA - valB;
+            
+            // Apply sort direction
+            return direction === 'asc' ? comparison : -comparison;
+        });
+  }, [competitors, activeTab, activeEvents, sortKey, sortDirection]);
+
+  // Determine the visually active sort key and direction for headers
+  const activeEvent = activeEvents.find(e => e.id === activeTab);
+  const defaultRankBy = activeEvent?.rankBy;
+  const currentSortKey = sortKey === null ? (defaultRankBy === 'average' ? 'average' : 'single') : sortKey;
+
+  const renderSortIndicator = (key) => {
+      const isActive = currentSortKey === key;
+      if (isActive) {
+          return <span className="text-blue-600 transition-transform">{sortDirection === 'asc' ? '▲' : '▼'}</span>;
+      }
+      return <span className="text-slate-300 group-hover:text-slate-400 transition-colors">▲</span>;
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+      {/* Header */}
+      <header className="bg-blue-600 text-white shadow-lg">
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center space-x-3">
+            <Trophy className="w-8 h-8 text-yellow-300" />
+            <h1 className="text-2xl font-bold">WCA Competitor Analyzer</h1>
+          </div>
+          <p className="mt-2 text-blue-100 opacity-90">
+            Parse registration lists, filter by event, and fetch global rankings automatically.
+          </p>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8 space-y-8">
+        
+        {/* EVENT SELECTION PANEL */}
+        <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="bg-slate-100 px-6 py-3 border-b border-slate-200 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-slate-500" />
+                    <h2 className="font-semibold text-slate-700">Event Configuration</h2>
+                </div>
+                <div className="text-sm text-slate-500">
+                    Expecting <strong>{activeEvents.length}</strong> columns in input
+                </div>
+            </div>
+            
+            <div className="p-6">
+                <div className="flex gap-4 mb-4">
+                    <button onClick={selectAllEvents} className="text-xs font-medium px-3 py-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors">
+                        Select All
+                    </button>
+                    <button onClick={clearAllEvents} className="text-xs font-medium px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors">
+                        Clear All
+                    </button>
+                </div>
+
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-9 gap-3">
+                    {EVENTS_DATA.map((ev) => {
+                        const isSelected = selectedEventIds.includes(ev.id);
+                        return (
+                            <button
+                                key={ev.id}
+                                onClick={() => toggleEvent(ev.id)}
+                                className={`
+                                    relative px-2 py-2 rounded-lg border text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2
+                                    ${isSelected 
+                                        ? 'bg-blue-600 border-blue-600 text-white shadow-md transform scale-105' 
+                                        : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300 hover:bg-slate-50'}
+                                `}
+                            >
+                                <span className={`cubing-icon event-${ev.id}`}></span>
+                                {ev.name}
+                            </button>
+                        );
+                    })}
+                </div>
+                <div className="mt-4 text-xs text-slate-400 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>Select the events available at this competition in the column order they appear on the registration page.</span>
+                </div>
+            </div>
+        </section>
+
+
+        {/* INPUT SECTION */}
+        <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
+            <button 
+              onClick={() => setInputType('url')}
+              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${inputType === 'url' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            >
+              <Globe className="w-4 h-4 inline mr-2" />
+              Import from URL
+            </button>
+            <button 
+              onClick={() => setInputType('text')}
+              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${inputType === 'text' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            >
+              <FileText className="w-4 h-4 inline mr-2" />
+              Paste Text
+            </button>
+          </div>
+
+          {inputType === 'url' ? (
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={inputUrl}
+                  onChange={(e) => setInputUrl(e.target.value)}
+                  placeholder="https://cubing-tw.net/event/..."
+                  className="flex-1 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <button 
+                  onClick={fetchFromUrl}
+                  disabled={fetchingUrl}
+                  className="bg-blue-600 text-white px-6 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                >
+                  {fetchingUrl ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Download className="w-4 h-4 mr-2"/>}
+                  Fetch
+                </button>
+              </div>
+              <p className="text-xs text-slate-500">Note: This uses a CORS proxy. Some websites may block automated access.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <textarea 
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder="Paste the table rows here (e.g. 1 Name WCAID Country Gender ✔ ✔ ...)"
+                className="w-full h-48 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-xs"
+              />
+              <div className="flex justify-between">
+                <button onClick={loadDemo} className="text-sm text-blue-600 hover:underline">Load Demo Data</button>
+                <button 
+                  onClick={() => parseInput()}
+                  className="bg-green-600 text-white px-8 py-2 rounded-lg font-medium hover:bg-green-700 flex items-center"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Parse & Analyze
+                </button>
+              </div>
+            </div>
+          )}
+
+          {errors.length > 0 && (
+            <div className="mt-4 p-4 bg-red-50 text-red-700 rounded-lg border border-red-200 text-sm space-y-1">
+                <div className="font-bold flex items-center"><AlertCircle className="w-4 h-4 mr-2"/> Parsing Errors</div>
+                {errors.slice(0, 5).map((err, i) => (
+                    <div key={i}>{err}</div>
+                ))}
+                {errors.length > 5 && <div>...and {errors.length - 5} more errors.</div>}
+            </div>
+          )}
+        </section>
+
+        {/* RESULTS SECTION */}
+        {competitors.length > 0 && (
+            <section className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col min-h-[500px]">
+                {/* Stats Header */}
+                <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-xl">
+                    <div className="flex items-center gap-4">
+                        <div className="bg-blue-100 p-3 rounded-full text-blue-600">
+                            <Users className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-800">Competitor Analysis</h2>
+                            <p className="text-sm text-slate-500">{competitors.length} competitors found</p>
+                        </div>
+                    </div>
+                    {loading && (
+                        <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm">
+                            <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 transition-all duration-300" style={{width: `${progress}%`}}></div>
+                            </div>
+                            <span className="text-xs font-bold text-blue-600">{progress}%</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Event Tabs */}
+                <div className="flex overflow-x-auto border-b border-slate-200 scrollbar-hide">
+                    {activeEvents.map(event => (
+                        <button
+                            key={event.id}
+                            onClick={() => setActiveTab(event.id)}
+                            className={`
+                                flex-shrink-0 px-6 py-4 text-sm font-medium transition-colors border-b-2 
+                                ${activeTab === event.id 
+                                    ? 'border-blue-600 text-blue-600 bg-blue-50' 
+                                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}
+                            `}
+                        >
+                            {event.name}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Table */}
+                <div className="overflow-x-auto flex-1">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
+                            <tr>
+                                <th className="px-6 py-3 w-16">#</th>
+                                <th className="px-6 py-3">Name</th>
+                                <th className="px-6 py-3">WCA ID</th>
+                                <th className="px-6 py-3">Country</th>
+                                
+                                {/* Single Header */}
+                                <th 
+                                    className={`px-6 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors group select-none`}
+                                    onClick={() => handleSort('single')}
+                                >
+                                    <div className={`flex items-center justify-end gap-1 ${currentSortKey === 'single' ? 'text-blue-700' : 'text-slate-500'}`}>
+                                        Single
+                                        {renderSortIndicator('single')}
+                                    </div>
+                                </th>
+
+                                {/* Average Header */}
+                                <th 
+                                    className={`px-6 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors group select-none`}
+                                    onClick={() => handleSort('average')}
+                                >
+                                    <div className={`flex items-center justify-end gap-1 ${currentSortKey === 'average' ? 'text-blue-700' : 'text-slate-500'}`}>
+                                        Average
+                                        {renderSortIndicator('average')}
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {sortedCompetitors.map((comp, idx) => {
+                                // Get both results
+                                const rawSingle = comp.ranks.singles[activeTab];
+                                const rawAverage = comp.ranks.averages[activeTab];
+                                
+                                // Pass resultType to formatTime for special handling (e.g., 333fm /100 suffix)
+                                const singleStr = formatTime(rawSingle, activeTab, 'single');
+                                const averageStr = formatTime(rawAverage, activeTab, 'average');
+                                
+                                // Determine which column is the primary rank for visual distinction
+                                const isRankBySingle = currentSortKey === 'single';
+
+                                return (
+                                    <tr key={comp.wcaId || idx} className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-6 py-3 text-slate-400 font-mono">{idx + 1}</td>
+                                        <td className="px-6 py-3 font-medium text-slate-800">
+                                            {comp.name}
+                                            {!comp.wcaId && <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Newcomer</span>}
+                                        </td>
+                                        <td className="px-6 py-3 text-slate-500 font-mono">
+                                            {comp.wcaId ? (
+                                                <a 
+                                                    href={`https://www.worldcubeassociation.org/persons/${comp.wcaId}`} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="text-blue-600 hover:underline"
+                                                >
+                                                    {comp.wcaId}
+                                                </a>
+                                            ) : '-'}
+                                        </td>
+                                        <td className="px-6 py-3 text-slate-600">{comp.country}</td>
+                                        
+                                        {/* Single Column */}
+                                        <td className={`px-6 py-3 text-right font-mono ${isRankBySingle ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
+                                            {singleStr || <span className="text-slate-300">-</span>}
+                                        </td>
+
+                                        {/* Average Column */}
+                                        <td className={`px-6 py-3 text-right font-mono ${!isRankBySingle ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
+                                            {averageStr || <span className="text-slate-300">-</span>}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                            {sortedCompetitors.length === 0 && (
+                                <tr>
+                                    <td colSpan="6" className="px-6 py-12 text-center text-slate-400">
+                                        No competitors registered for {activeEvent?.name}.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        )}
+      </main>
+    </div>
+  );
+}
