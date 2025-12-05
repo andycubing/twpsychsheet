@@ -17,7 +17,7 @@
     
     <style>
         body { font-family: 'Inter', sans-serif; }
-        /* Hide scrollbar for event tabs */
+        /* Hide scrollbar for event tabs - Note: This is now less necessary but kept for other overflows */
         .scrollbar-hide::-webkit-scrollbar {
             display: none;
         }
@@ -771,7 +771,7 @@
                     )}
                 </section>
 
-                {/* RESULTS SECTION */}
+                {/* RESULTS SECTION - Renamed to Pre-Ranking */}
                 {competitors.length > 0 && (
                     <section className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col min-h-[500px]">
                         {/* Stats Header */}
@@ -781,7 +781,7 @@
                                     <Users className="w-6 h-6" />
                                 </div>
                                 <div>
-                                    <h2 className="text-xl font-bold text-slate-800">Competitor Analysis</h2>
+                                    <h2 className="text-xl font-bold text-slate-800">Pre-Ranking</h2>
                                     <p className="text-sm text-slate-500">{competitors.length} competitors found</p>
                                 </div>
                             </div>
@@ -795,20 +795,22 @@
                             )}
                         </div>
 
-                        {/* Event Tabs */}
-                        <div className="flex overflow-x-auto border-b border-slate-200 scrollbar-hide">
+                        {/* Event Navigation Buttons (Responsive Grid) */}
+                        <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-9 gap-2 p-4 border-b border-slate-200">
                             {activeEvents.map(event => (
                                 <button
                                     key={event.id}
                                     onClick={() => setActiveTab(event.id)}
                                     className={`
-                                        flex-shrink-0 px-6 py-4 text-sm font-medium transition-colors border-b-2 
+                                        relative px-2 py-2 rounded-lg border text-sm font-medium transition-all duration-200 flex flex-col items-center justify-center gap-1 min-w-[70px]
                                         ${activeTab === event.id 
-                                            ? 'border-blue-600 text-blue-600 bg-blue-50' 
-                                            : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}
+                                            ? 'bg-blue-600 border-blue-600 text-white shadow-md' 
+                                            : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50'}
                                     `}
                                 >
-                                    {event.name}
+                                    {/* Cubing Icon - Note: Requires external CSS link in <head> */}
+                                    <span className={`cubing-icon event-${event.id} text-xl`}></span>
+                                    <span className="text-xs mt-1 leading-none">{event.name}</span>
                                 </button>
                             ))}
                         </div>
