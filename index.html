@@ -504,16 +504,31 @@
                         }
                     });
 
-                    // Rough heuristic for country (first token after ID but before event markers)
+                    // --- Refined Country Guess/Fallback Logic ---
                     const preamble = rest.substring(0, rest.indexOf(markerString)).trim();
-                    // Split by whitespace and filter empty tokens
                     const preambleTokens = preamble.split(/\s+/).filter(t => t.length > 0);
-                    // Find the token that looks like a country name (e.g., starts with capital letter)
                     let countryGuess = 'Unknown';
-                    const countryToken = preambleTokens.find(token => token[0] && token[0] === token[0].toUpperCase());
-                    if(countryToken) {
-                        countryGuess = countryToken;
+                    
+                    if (preambleTokens.length > 0) {
+                        let countryIndex = -1;
+                        for (let i = 0; i < preambleTokens.length; i++) {
+                            // Check if it looks like a country name start (Capitalized)
+                            if (preambleTokens[i][0] && preambleTokens[i][0] === preambleTokens[i][0].toUpperCase()) {
+                                countryIndex = i;
+                                countryGuess = preambleTokens[i];
+                                
+                                // Check for common two-word countries (e.g., Hong Kong, New Zealand)
+                                if (i + 1 < preambleTokens.length && preambleTokens[i+1][0] && preambleTokens[i+1][0] === preambleTokens[i+1][0].toUpperCase()) {
+                                    if ((preambleTokens[i] === 'Hong' && preambleTokens[i+1] === 'Kong') ||
+                                        (preambleTokens[i] === 'New' && preambleTokens[i+1] === 'Zealand')) {
+                                        countryGuess = `${preambleTokens[i]} ${preambleTokens[i+1]}`;
+                                    }
+                                }
+                                break;
+                            }
+                        }
                     }
+                    // --- End Refined Country Guess/Fallback Logic ---
 
 
                     parsed.push({
@@ -521,7 +536,7 @@
                         wcaId: wcaId,
                         events: eventsRegistered,
                         ranks: { singles: {}, averages: {} }, 
-                        country: countryGuess 
+                        country: countryGuess // Initial fallback guess
                     });
                 } else {
                      parseErrors.push(`Line ${index + 1}: Found ID ${wcaId} but couldn't find ${expectedColumns} event columns. (Found ${userEvents ? userEvents.length : 0} markers)`);
@@ -568,17 +583,27 @@
                         const url = `https://raw.githubusercontent.com/robiningelbrecht/wca-rest-api/master/api/persons/${comp.wcaId}.json`;
                         const data = await fetchWithRetry(url);
                         
-                        if (data && data.rank) {
-                            // Store singles and averages
-                            if (data.rank.singles) {
-                                data.rank.singles.forEach(r => {
-                                    comp.ranks.singles[r.eventId] = r.best;
-                                });
+                        if (data) {
+                            // Use WCA Country ID (short code) as the canonical country representation
+                            if (data.countryId) {
+                                comp.country = data.countryId; 
+                            } else if (data.country) {
+                                // Fallback to country name if ID is missing but country object exists
+                                comp.country = data.country.name || comp.country;
                             }
-                            if (data.rank.averages) {
-                                data.rank.averages.forEach(r => {
-                                    comp.ranks.averages[r.eventId] = r.best;
-                                });
+
+                            if (data.rank) {
+                                // Store singles and averages
+                                if (data.rank.singles) {
+                                    data.rank.singles.forEach(r => {
+                                        comp.ranks.singles[r.eventId] = r.best;
+                                    });
+                                }
+                                if (data.rank.averages) {
+                                    data.rank.averages.forEach(r => {
+                                        comp.ranks.averages[r.eventId] = r.best;
+                                    });
+                                }
                             }
                         }
                     } catch (error) {
@@ -880,7 +905,10 @@
                                                         </a>
                                                     ) : '-'}
                                                 </td>
-                                                <td className="px-6 py-3 text-slate-600 whitespace-nowrap">{comp.country}</td>
+                                                {/* Display country code if fetched, otherwise fallback guess */}
+                                                <td className="px-6 py-3 text-slate-600 whitespace-nowrap font-semibold">
+                                                    {comp.country}
+                                                </td>
                                                 
                                                 {/* Single Column */}
                                                 <td className={`px-6 py-3 text-right font-mono whitespace-nowrap ${isRankBySingle ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
