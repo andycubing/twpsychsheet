@@ -677,7 +677,7 @@
                     }
 
                     // Apply sort direction
-                    return direction === 'asc' ? comparison : -comparison;
+                    return direction === 'desc' ? comparison : -comparison;
                 });
           }, [competitors, activeTab, activeEvents, sortKey, sortDirection]);
 
