@@ -1,130 +1,181 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Trophy, AlertCircle, RefreshCw, Check, X, FileText, Download, Users, Globe, Loader2, Settings, ListFilter } from 'lucide-react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WCA Competitor Analyzer</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load React -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <!-- Load ReactDOM -->
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Load Babel for JSX support -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Load Cubing Icons CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cubing-icons/0.1.0/css/cubing-icons.min.css">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Hide scrollbar for event tabs */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+        /* Custom animation for Loader2 */
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin {
+          animation: spin 1s linear infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
 
-// The specific order mentioned for Taiwanese competitions
-const EVENTS_DATA = [
-  { id: '333', name: '3x3x3', rankBy: 'average' },
-  { id: '222', name: '2x2x2', rankBy: 'average' },
-  { id: '444', name: '4x4x4', rankBy: 'average' },
-  { id: '555', name: '5x5x5', rankBy: 'average' },
-  { id: '666', name: '6x6x6', rankBy: 'average' },
-  { id: '777', name: '7x7x7', rankBy: 'average' },
-  { id: '333bf', name: '3x3 BLD', rankBy: 'single' },
-  { id: '333fm', name: 'FMC', rankBy: 'single' },
-  { id: '333oh', name: '3x3 OH', rankBy: 'average' },
-  { id: 'clock', name: 'Clock', rankBy: 'average' },
-  { id: 'minx', name: 'Megaminx', rankBy: 'average' },
-  { id: 'pyram', name: 'Pyraminx', rankBy: 'average' },
-  { id: 'skewb', name: 'Skewb', rankBy: 'average' },
-  { id: 'sq1', name: 'Square-1', rankBy: 'average' },
-  { id: '444bf', name: '4x4 BLD', rankBy: 'single' },
-  { id: '555bf', name: '5x5 BLD', rankBy: 'single' },
-  { id: '333mbf', name: 'Multi-Blind', rankBy: 'single' },
-];
+    <script type="text/babel">
+        // ------------------------------------------
+        // ICON DEFINITIONS (Replacing Lucide Imports)
+        // ------------------------------------------
 
-/**
- * Formats time from centiseconds based on event and result type.
- * @param {number} centiseconds - The raw result value.
- * @param {string} eventId - The WCA event ID.
- * @param {('single'|'average')} resultType - Whether this is being formatted for the single or average column.
- * @returns {string} The formatted time string.
- */
-const formatTime = (centiseconds, eventId, resultType) => {
-  if (!centiseconds || centiseconds <= 0) return "";
-  
-  // 1. Multi-Blind (333mbf)
-  if (eventId === '333mbf') {
-      const R = centiseconds;
-      const missed = R % 100; 
-      const timeInSeconds = Math.floor(R / 100) % 100000; 
-      const difference = Math.floor(R / 10000000); 
+        const Trophy = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14v7"/><path d="M14 14v7"/><path d="M18.4 14a4.4 4.4 0 0 0-1.72-3.87 5 5 0 0 0-8.96 0A4.4 4.4 0 0 0 5.6 14"/><path d="M12 10v2"/></svg>);
+        const AlertCircle = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>);
+        const RefreshCw = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 18 0"/><path d="M3 12a9 9 0 0 1 18 0"/></svg>);
+        const FileText = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>);
+        const Download = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>);
+        const Users = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>);
+        const Globe = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>);
+        const Loader2 = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>);
+        const Settings = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.73l-.15.1a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1 0-2.73l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>);
+        
+        // ------------------------------------------
+        // COMPONENT LOGIC (Adapted from App.jsx)
+        // ------------------------------------------
 
-      const mins = Math.floor(timeInSeconds / 60);
-      const secs = timeInSeconds % 60;
-      const timeStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        const { useState, useEffect, useMemo } = React;
 
-      const solved = (99 - difference) + missed;
-      const attempted = solved + missed;
-      
-      if (solved < 0 || attempted < 0) return R.toString(); 
+        // The specific order mentioned for Taiwanese competitions
+        const EVENTS_DATA = [
+          { id: '333', name: '3x3x3', rankBy: 'average' },
+          { id: '222', name: '2x2x2', rankBy: 'average' },
+          { id: '444', name: '4x4x4', rankBy: 'average' },
+          { id: '555', name: '5x5x5', rankBy: 'average' },
+          { id: '666', name: '6x6x6', rankBy: 'average' },
+          { id: '777', name: '7x7x7', rankBy: 'average' },
+          { id: '333bf', name: '3x3 BLD', rankBy: 'single' },
+          { id: '333fm', name: 'FMC', rankBy: 'single' },
+          { id: '333oh', name: '3x3 OH', rankBy: 'average' },
+          { id: 'clock', name: 'Clock', rankBy: 'average' },
+          { id: 'minx', name: 'Megaminx', rankBy: 'average' },
+          { id: 'pyram', name: 'Pyraminx', rankBy: 'average' },
+          { id: 'skewb', name: 'Skewb', rankBy: 'average' },
+          { id: 'sq1', name: 'Square-1', rankBy: 'average' },
+          { id: '444bf', name: '4x4 BLD', rankBy: 'single' },
+          { id: '555bf', name: '5x5 BLD', rankBy: 'single' },
+          { id: '333mbf', name: 'Multi-Blind', rankBy: 'single' },
+        ];
 
-      return `${solved}/${attempted} ${timeStr}`;
-  }
+        /**
+         * Formats time from centiseconds based on event and result type.
+         */
+        const formatTime = (centiseconds, eventId, resultType) => {
+          if (!centiseconds || centiseconds <= 0) return "";
+          
+          // 1. Multi-Blind (333mbf)
+          if (eventId === '333mbf') {
+              const R = centiseconds;
+              const missed = R % 100; 
+              const timeInSeconds = Math.floor(R / 100) % 100000; 
+              const difference = Math.floor(R / 10000000); 
 
-  // 2. FMC (333fm) - Apply /100 suffix only for the 'Average' column as requested
-  if (eventId === '333fm') {
-      const moves = centiseconds;
-      if (resultType === 'average') {
-          return (centiseconds / 100).toFixed(2);
-      }
-      // Single result is just the move count
-      return moves.toString();
-  }
+              const mins = Math.floor(timeInSeconds / 60);
+              const secs = timeInSeconds % 60;
+              const timeStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 
-  // 3. Standard Time
-  let mins = Math.floor(centiseconds / 6000);
-  let secs = Math.floor((centiseconds % 6000) / 100);
-  let decis = centiseconds % 100;
+              const solved = (99 - difference) + missed;
+              const attempted = solved + missed;
+              
+              if (solved < 0 || attempted < 0) return R.toString(); 
 
-  let sDecis = decis < 10 ? `0${decis}` : decis;
-  let sSecs = secs < 10 && mins > 0 ? `0${secs}` : secs;
+              return `${solved}/${attempted} ${timeStr}`;
+          }
 
-  if (mins > 0) return `${mins}:${sSecs}.${sDecis}`;
-  return `${secs}.${sDecis}`;
-};
+          // 2. FMC (333fm) - Apply /100 suffix only for the 'Average' column as requested
+          if (eventId === '333fm') {
+              const moves = centiseconds;
+              if (resultType === 'average') {
+                  return (centiseconds / 100).toFixed(2);
+              }
+              // Single result is just the move count
+              return moves.toString();
+          }
 
-export default function App() {
-  const [inputType, setInputType] = useState('url'); // 'text' or 'url'
-  const [inputText, setInputText] = useState('');
-  const [inputUrl, setInputUrl] = useState('https://cubing-tw.net/event/2025TaiwanChampionship/competitors');
-  
-  // New state for selected events configuration
-  const [selectedEventIds, setSelectedEventIds] = useState(EVENTS_DATA.map(e => e.id));
-  
-  const [competitors, setCompetitors] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [fetchingUrl, setFetchingUrl] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [activeTab, setActiveTab] = useState('333');
-  const [errors, setErrors] = useState([]);
+          // 3. Standard Time
+          let mins = Math.floor(centiseconds / 6000);
+          let secs = Math.floor((centiseconds % 6000) / 100);
+          let decis = centiseconds % 100;
 
-  // New state for sorting
-  const [sortKey, setSortKey] = useState(null); // 'single', 'average', or null for default
-  const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
+          let sDecis = decis < 10 ? `0${decis}` : decis;
+          let sSecs = secs < 10 && mins > 0 ? `0${secs}` : secs;
+
+          if (mins > 0) return `${mins}:${sSecs}.${sDecis}`;
+          return `${secs}.${sDecis}`;
+        };
+
+        function App() {
+          const [inputType, setInputType] = useState('url'); // 'text' or 'url'
+          const [inputText, setInputText] = useState('');
+          const [inputUrl, setInputUrl] = useState('https://cubing-tw.net/event/2025TaiwanChampionship/competitors');
+          
+          const [selectedEventIds, setSelectedEventIds] = useState(EVENTS_DATA.map(e => e.id));
+          
+          const [competitors, setCompetitors] = useState([]);
+          const [loading, setLoading] = useState(false);
+          const [fetchingUrl, setFetchingUrl] = useState(false);
+          const [progress, setProgress] = useState(0);
+          const [activeTab, setActiveTab] = useState('333');
+          const [errors, setErrors] = useState([]);
+
+          const [sortKey, setSortKey] = useState(null); 
+          const [sortDirection, setSortDirection] = useState('asc'); 
 
 
-  // Derived list of active event objects based on selection order
-  const activeEvents = useMemo(() => {
-    return EVENTS_DATA.filter(e => selectedEventIds.includes(e.id));
-  }, [selectedEventIds]);
+          // Derived list of active event objects based on selection order
+          const activeEvents = useMemo(() => {
+            return EVENTS_DATA.filter(e => selectedEventIds.includes(e.id));
+          }, [selectedEventIds]);
 
-  // Ensure active tab is valid when selection changes
-  useEffect(() => {
-    if (activeEvents.length > 0 && !selectedEventIds.includes(activeTab)) {
-      setActiveTab(activeEvents[0].id);
-    }
-  }, [activeEvents, activeTab, selectedEventIds]);
+          // Ensure active tab is valid when selection changes
+          useEffect(() => {
+            if (activeEvents.length > 0 && !selectedEventIds.includes(activeTab)) {
+              setActiveTab(activeEvents[0].id);
+            }
+          }, [activeEvents, activeTab, selectedEventIds]);
 
-  // Reset sort when the tab changes
-  useEffect(() => {
-    setSortKey(null);
-    setSortDirection('asc');
-  }, [activeTab]);
+          // Reset sort when the tab changes
+          useEffect(() => {
+            setSortKey(null);
+            setSortDirection('asc');
+          }, [activeTab]);
 
-  const toggleEvent = (id) => {
-    setSelectedEventIds(prev => 
-      prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
-    );
-  };
+          const toggleEvent = (id) => {
+            setSelectedEventIds(prev => 
+              prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
+            );
+          };
 
-  const selectAllEvents = () => setSelectedEventIds(EVENTS_DATA.map(e => e.id));
-  const clearAllEvents = () => setSelectedEventIds([]);
+          const selectAllEvents = () => setSelectedEventIds(EVENTS_DATA.map(e => e.id));
+          const clearAllEvents = () => setSelectedEventIds([]);
 
-  const loadDemo = () => {
-    setInputType('text');
-    // Re-select all events to match demo data
-    selectAllEvents();
-    const demo = `1	Chia-Leo Lin (林珈樂)	2006LINC01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	-	-	✔
+          const loadDemo = () => {
+            setInputType('text');
+            // Re-select all events to match demo data
+            selectAllEvents();
+            const demo = `11	Chia-Leo Lin (林珈樂)	2006LINC01	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	✔	-	-	✔
 2	Meng Chon Kuok (郭明臻)	2023KUOK01	Macau	女 Female	✔	✔	✔	✔	✔	✔	✔	-	-	✔	-	-	-	-	✔	✔	-
 3	Jerry Chung (鍾養浩)	2017HOJE01	Hong Kong	男 Male	✔	✔	✔	✔	✔	✔	✔	-	✔	✔	✔	✔	✔	-	-	-	-
 4	Ching-Cheng Hsieh (謝京城)	2013HSIE01	Taiwan	男 Male	✔	✔	✔	✔	✔	-	-	-	-	-	-	-	-	-	-	-	-
@@ -399,514 +450,561 @@ export default function App() {
 273	Chan Ho Hin (陳𣉞軒)	2023HINC04	Hong Kong	男 Male	✔	✔	✔	✔	-	-	✔	-	-	✔	-	✔	✔	-	-	-	-
 274	Chih-Chuan Yang (楊智全)	2018YANG92	Taiwan	男 Male	✔	✔	✔	✔	✔	✔	✔	-	✔	-	-	-	-	-	-	✔	✔
 275	Shih-Hao Wang (王士豪)	2015WANG46	Taiwan	男 Male	✔	-	✔	✔	✔	✔	-	✔	✔	-	-	-	-	✔	-	-	-`;
-    setInputText(demo);
-  };
+            setInputText(demo);
+          };
 
-  const fetchFromUrl = async () => {
-    if (!inputUrl) return;
-    setFetchingUrl(true);
-    setErrors([]);
+          // Helper for exponential backoff retry logic
+          const fetchWithRetry = async (url, retries = 3) => {
+              for (let i = 0; i < retries; i++) {
+                  try {
+                      const response = await fetch(url);
+                      if (response.ok) return await response.json();
+                      if (response.status === 404) return null; 
+                      if (i < retries - 1) {
+                          await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                      } else {
+                          throw new Error(`Failed after ${retries} retries`);
+                      }
+                  } catch (err) {
+                      if (i === retries - 1) throw err;
+                  }
+              }
+          };
 
-    try {
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(inputUrl)}`;
-        const response = await fetch(proxyUrl);
-        const data = await response.json();
-        
-        if (!data.contents) throw new Error("No content received from proxy.");
+          const fetchFromUrl = async () => {
+            if (!inputUrl) return;
+            setFetchingUrl(true);
+            setErrors([]);
 
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(data.contents, 'text/html');
-        
-        const rows = doc.querySelectorAll('tr');
-        let extractedText = "";
-
-        rows.forEach(row => {
-            const cells = Array.from(row.querySelectorAll('td, th'));
-            if (cells.length > 0) {
-                const rowText = cells.map(cell => cell.innerText.trim()).join('\t');
-                extractedText += rowText + '\n';
-            }
-        });
-
-        if (extractedText.length < 50) {
-            throw new Error("Could not find a valid table in the fetched URL.");
-        }
-
-        setInputType('text');
-        setInputText(extractedText);
-        
-        // Slight delay to allow state update before parsing
-        setTimeout(() => parseInput(extractedText), 100);
-
-    } catch (err) {
-        setErrors([`Failed to fetch from URL: ${err.message}. Try copy-pasting manually.`]);
-    } finally {
-        setFetchingUrl(false);
-    }
-  };
-
-  const parseInput = (textToParse = inputText) => {
-    if (activeEvents.length === 0) {
-        setErrors(["Please select at least one event in the configuration above."]);
-        return;
-    }
-
-    const lines = textToParse.split('\n').filter(line => line.trim() !== '');
-    const parsed = [];
-    const parseErrors = [];
-    
-    // Dynamic regex based on number of selected events
-    // We look for N occurrences of checkmarks/dashes
-    const expectedColumns = activeEvents.length;
-    const eventColumnsRegex = new RegExp(`([✔✓\\-]\\s*){${expectedColumns}}`);
-
-    lines.forEach((line, index) => {
-      // Regex to find WCA ID: 4 digits, 4 letters, 2 digits
-      const wcaIdMatch = line.match(/(\d{4}[A-Z]{4}\d{2})/);
-      
-      if (wcaIdMatch) {
-        const wcaId = wcaIdMatch[0];
-        
-        const namePart = line.substring(0, line.indexOf(wcaId)).trim();
-        const cleanName = namePart.replace(/^\d+\s*/, '').trim();
-        const rest = line.substring(line.indexOf(wcaId) + wcaId.length);
-        
-        const eventMarkersMatch = rest.match(eventColumnsRegex);
-        
-        if (eventMarkersMatch) {
-            const markerString = eventMarkersMatch[0];
-            const userEvents = markerString.match(/[✔✓\-]/g);
-            
-            // Map the found columns to the currently active events
-            const eventsRegistered = {};
-            activeEvents.forEach((ev, i) => {
-                if (userEvents && userEvents[i]) {
-                    eventsRegistered[ev.id] = userEvents[i] === '✔' || userEvents[i] === '✓';
-                }
-            });
-
-            // Rough heuristic for country
-            const preamble = rest.substring(0, rest.indexOf(markerString)).trim();
-            const preambleTokens = preamble.split(/\s+/).filter(t => t.length > 0);
-            const countryGuess = preambleTokens[0] || 'Unknown';
-
-            parsed.push({
-                name: cleanName,
-                wcaId: wcaId,
-                events: eventsRegistered,
-                ranks: { singles: {}, averages: {} }, 
-                country: countryGuess 
-            });
-        } else {
-             parseErrors.push(`Line ${index + 1}: Found ID ${wcaId} but couldn't find ${expectedColumns} event columns.`);
-        }
-      }
-    });
-
-    if (parsed.length === 0) {
-        if (!textToParse.trim()) return; 
-        setErrors([`No valid competitors found. Make sure the number of event columns in the text matches your selection (${expectedColumns} events).`]);
-        return;
-    }
-
-    setCompetitors(parsed);
-    setErrors(parseErrors);
-    fetchData(parsed);
-  };
-
-  const fetchData = async (competitorList) => {
-    setLoading(true);
-    setProgress(0);
-    const results = [...competitorList];
-    const total = results.length;
-    let completed = 0;
-
-    const BATCH_SIZE = 5;
-    
-    const fetchWithRetry = async (url, retries = 3) => {
-        for (let i = 0; i < retries; i++) {
             try {
-                const response = await fetch(url);
-                if (response.ok) return await response.json();
-                if (response.status === 404) return null; 
-                if (i < retries - 1) {
-                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
-                } else {
-                    throw new Error(`Failed after ${retries} retries`);
-                }
-            } catch (err) {
-                if (i === retries - 1) throw err;
-            }
-        }
-    };
-
-    const processBatch = async (batch) => {
-        const promises = batch.map(async (comp) => {
-            try {
-                const data = await fetchWithRetry(`https://raw.githubusercontent.com/robiningelbrecht/wca-rest-api/master/api/persons/${comp.wcaId}.json`);
+                // Using a CORS proxy to fetch the content
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(inputUrl)}`;
+                const data = await fetchWithRetry(proxyUrl);
                 
-                if (data && data.rank) {
-                    // Store singles and averages
-                    if (data.rank.singles) {
-                        data.rank.singles.forEach(r => {
-                            comp.ranks.singles[r.eventId] = r.best;
-                        });
+                if (!data || !data.contents) throw new Error("No content received from proxy or failed to fetch.");
+
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(data.contents, 'text/html');
+                
+                const rows = doc.querySelectorAll('tr');
+                let extractedText = "";
+
+                rows.forEach(row => {
+                    // Only process rows that contain <td> or <th> elements (table data)
+                    const cells = Array.from(row.querySelectorAll('td, th'));
+                    if (cells.length > 0) {
+                        const rowText = cells.map(cell => cell.innerText.trim()).join('\t');
+                        extractedText += rowText + '\n';
                     }
-                    if (data.rank.averages) {
-                        data.rank.averages.forEach(r => {
-                            comp.ranks.averages[r.eventId] = r.best;
-                        });
-                    }
+                });
+
+                if (extractedText.length < 50) {
+                    throw new Error("Could not find a valid table in the fetched URL. Check the URL and try copy-pasting manually.");
                 }
-            } catch (error) {
-                console.error(`Error fetching ${comp.wcaId}:`, error);
+
+                setInputType('text');
+                setInputText(extractedText);
+                
+                // Slight delay to allow state update before parsing
+                setTimeout(() => parseInput(extractedText), 100);
+
+            } catch (err) {
+                console.error("Fetch error:", err);
+                setErrors([`Failed to fetch from URL: ${err.message}. Ensure the URL is correct and the site allows access.`]);
             } finally {
-                completed++;
-                setProgress(Math.round((completed / total) * 100));
+                setFetchingUrl(false);
             }
-        });
-        await Promise.all(promises);
-    };
+          };
 
-    for (let i = 0; i < results.length; i += BATCH_SIZE) {
-        const batch = results.slice(i, i + BATCH_SIZE);
-        await processBatch(batch);
-    }
+          const parseInput = (textToParse = inputText) => {
+            if (activeEvents.length === 0) {
+                setErrors(["Please select at least one event in the configuration above."]);
+                return;
+            }
 
-    setCompetitors(results);
-    setLoading(false);
-  };
-  
-  // Function to handle header click for sorting
-  const handleSort = (key) => {
-      // If clicking the currently sorted key, reverse direction
-      if (sortKey === key) {
-          setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-      } else {
-          // If clicking a new key, set it and default to ascending (lower is better for time)
-          setSortKey(key);
-          setSortDirection('asc'); 
-      }
-  };
-
-
-  // Sorting logic for table
-  const sortedCompetitors = useMemo(() => {
-    const activeEvent = activeEvents.find(e => e.id === activeTab);
-    if (!activeEvent) return competitors;
-
-    // Determine the column to sort by: user choice (sortKey) overrides event default (rankBy)
-    let currentSortKey = sortKey;
-    if (currentSortKey === null) {
-        currentSortKey = activeEvent.rankBy === 'average' ? 'average' : 'single';
-    }
-    
-    const rankType = currentSortKey === 'average' ? 'averages' : 'singles';
-    const direction = sortDirection;
-
-    return [...competitors]
-        .filter(c => c.events[activeTab]) // Only show registered
-        .sort((a, b) => {
-            const resA = a.ranks[rankType][activeTab];
-            const resB = b.ranks[rankType][activeTab];
-
-            // Handle no results (Infinity for asc sort)
-            const valA = resA ? resA : Infinity;
-            const valB = resB ? resB : Infinity;
-
-            let comparison = valA - valB;
+            const lines = textToParse.split('\n').filter(line => line.trim() !== '');
+            const parsed = [];
+            const parseErrors = [];
             
-            // Apply sort direction
-            return direction === 'asc' ? comparison : -comparison;
-        });
-  }, [competitors, activeTab, activeEvents, sortKey, sortDirection]);
+            const expectedColumns = activeEvents.length;
+            // Matches exactly N occurrences of checkmarks/dashes, potentially separated by spaces
+            const eventColumnsRegex = new RegExp(`([✔✓\\-]\\s*){${expectedColumns}}`);
 
-  // Determine the visually active sort key and direction for headers
-  const activeEvent = activeEvents.find(e => e.id === activeTab);
-  const defaultRankBy = activeEvent?.rankBy;
-  const currentSortKey = sortKey === null ? (defaultRankBy === 'average' ? 'average' : 'single') : sortKey;
+            lines.forEach((line, index) => {
+              // Regex to find WCA ID: 4 digits, 4 letters, 2 digits
+              const wcaIdMatch = line.match(/(\d{4}[A-Z]{4}\d{2})/);
+              
+              if (wcaIdMatch) {
+                const wcaId = wcaIdMatch[0];
+                
+                const namePart = line.substring(0, line.indexOf(wcaId)).trim();
+                const cleanName = namePart.replace(/^\d+\s*/, '').trim();
+                const rest = line.substring(line.indexOf(wcaId) + wcaId.length);
+                
+                const eventMarkersMatch = rest.match(eventColumnsRegex);
+                
+                if (eventMarkersMatch) {
+                    const markerString = eventMarkersMatch[0];
+                    // Get only the markers: ✔, ✓, or -
+                    const userEvents = markerString.match(/[✔✓\-]/g);
+                    
+                    const eventsRegistered = {};
+                    activeEvents.forEach((ev, i) => {
+                        if (userEvents && userEvents[i]) {
+                            eventsRegistered[ev.id] = userEvents[i] === '✔' || userEvents[i] === '✓';
+                        }
+                    });
 
-  const renderSortIndicator = (key) => {
-      const isActive = currentSortKey === key;
-      if (isActive) {
-          return <span className="text-blue-600 transition-transform">{sortDirection === 'asc' ? '▲' : '▼'}</span>;
-      }
-      return <span className="text-slate-300 group-hover:text-slate-400 transition-colors">▲</span>;
-  };
+                    // Rough heuristic for country (first token after ID but before event markers)
+                    const preamble = rest.substring(0, rest.indexOf(markerString)).trim();
+                    // Split by whitespace and filter empty tokens
+                    const preambleTokens = preamble.split(/\s+/).filter(t => t.length > 0);
+                    // Find the token that looks like a country name (e.g., starts with capital letter)
+                    let countryGuess = 'Unknown';
+                    const countryToken = preambleTokens.find(token => token[0] && token[0] === token[0].toUpperCase());
+                    if(countryToken) {
+                        countryGuess = countryToken;
+                    }
 
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      {/* Header */}
-      <header className="bg-blue-600 text-white shadow-lg">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center space-x-3">
-            <Trophy className="w-8 h-8 text-yellow-300" />
-            <h1 className="text-2xl font-bold">WCA Competitor Analyzer</h1>
-          </div>
-          <p className="mt-2 text-blue-100 opacity-90">
-            Parse registration lists, filter by event, and fetch global rankings automatically.
-          </p>
-        </div>
-      </header>
 
-      <main className="container mx-auto px-4 py-8 space-y-8">
-        
-        {/* EVENT SELECTION PANEL */}
-        <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="bg-slate-100 px-6 py-3 border-b border-slate-200 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                    <Settings className="w-5 h-5 text-slate-500" />
-                    <h2 className="font-semibold text-slate-700">Event Configuration</h2>
-                </div>
-                <div className="text-sm text-slate-500">
-                    Expecting <strong>{activeEvents.length}</strong> columns in input
-                </div>
-            </div>
+                    parsed.push({
+                        name: cleanName,
+                        wcaId: wcaId,
+                        events: eventsRegistered,
+                        ranks: { singles: {}, averages: {} }, 
+                        country: countryGuess 
+                    });
+                } else {
+                     parseErrors.push(`Line ${index + 1}: Found ID ${wcaId} but couldn't find ${expectedColumns} event columns. (Found ${userEvents ? userEvents.length : 0} markers)`);
+                }
+              }
+            });
+
+            if (parsed.length === 0) {
+                if (!textToParse.trim()) return; 
+                setErrors([`No valid competitors found. Make sure the number of event columns in the text matches your selection (${expectedColumns} events).`]);
+                return;
+            }
+
+            setCompetitors(parsed);
+            // Clear errors but show parse errors if any
+            if(parseErrors.length > 0) {
+                setErrors(parseErrors);
+            } else {
+                setErrors([]);
+            }
+            fetchData(parsed);
+          };
+
+          const fetchData = async (competitorList) => {
+            setLoading(true);
+            setProgress(0);
+            const results = [...competitorList];
+            const total = results.length;
+            let completed = 0;
+
+            const BATCH_SIZE = 5;
             
-            <div className="p-6">
-                <div className="flex gap-4 mb-4">
-                    <button onClick={selectAllEvents} className="text-xs font-medium px-3 py-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors">
-                        Select All
-                    </button>
-                    <button onClick={clearAllEvents} className="text-xs font-medium px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors">
-                        Clear All
-                    </button>
+            const processBatch = async (batch) => {
+                const promises = batch.map(async (comp) => {
+                    // Skip fetching data if WCA ID is missing (newcomer or bad parse)
+                    if (!comp.wcaId) {
+                        completed++;
+                        setProgress(Math.round((completed / total) * 100));
+                        return; 
+                    }
+                    
+                    try {
+                        // WCA Ranking API (static JSON files)
+                        const url = `https://raw.githubusercontent.com/robiningelbrecht/wca-rest-api/master/api/persons/${comp.wcaId}.json`;
+                        const data = await fetchWithRetry(url);
+                        
+                        if (data && data.rank) {
+                            // Store singles and averages
+                            if (data.rank.singles) {
+                                data.rank.singles.forEach(r => {
+                                    comp.ranks.singles[r.eventId] = r.best;
+                                });
+                            }
+                            if (data.rank.averages) {
+                                data.rank.averages.forEach(r => {
+                                    comp.ranks.averages[r.eventId] = r.best;
+                                });
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`Error fetching ${comp.wcaId}:`, error);
+                    } finally {
+                        completed++;
+                        setProgress(Math.round((completed / total) * 100));
+                    }
+                });
+                await Promise.all(promises);
+            };
+
+            for (let i = 0; i < results.length; i += BATCH_SIZE) {
+                const batch = results.slice(i, i + BATCH_SIZE);
+                await processBatch(batch);
+            }
+
+            setCompetitors(results);
+            setLoading(false);
+          };
+          
+          // Function to handle header click for sorting
+          const handleSort = (key) => {
+              if (sortKey === key) {
+                  setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+              } else {
+                  setSortKey(key);
+                  setSortDirection('asc'); 
+              }
+          };
+
+
+          // Sorting logic for table
+          const sortedCompetitors = useMemo(() => {
+            const activeEvent = activeEvents.find(e => e.id === activeTab);
+            if (!activeEvent) return competitors;
+
+            // Determine the column to sort by: user choice (sortKey) overrides event default (rankBy)
+            let currentSortKey = sortKey;
+            if (currentSortKey === null) {
+                currentSortKey = activeEvent.rankBy === 'average' ? 'average' : 'single';
+            }
+            
+            const rankType = currentSortKey === 'average' ? 'averages' : 'singles';
+            const direction = sortDirection;
+
+            // Filter by registered users first
+            const filtered = competitors.filter(c => c.events[activeTab]);
+
+            // Sort logic
+            return [...filtered]
+                .sort((a, b) => {
+                    const resA = a.ranks[rankType][activeTab];
+                    const resB = b.ranks[rankType][activeTab];
+
+                    // Handle no results: times are best ranked by lower value, so null/0 is treated as Infinity (worst)
+                    // Multi-Blind (333mbf) results are ranked by higher value
+                    const isMultiBlind = activeTab === '333mbf';
+                    
+                    let valA = resA ? resA : isMultiBlind ? -Infinity : Infinity;
+                    let valB = resB ? resB : isMultiBlind ? -Infinity : Infinity;
+                    
+                    let comparison = valA - valB;
+
+                    if (isMultiBlind) {
+                        // For 333mbf, higher value is better, so the comparison is reversed
+                        comparison = valB - valA;
+                    }
+
+                    // Apply sort direction
+                    return direction === 'asc' ? comparison : -comparison;
+                });
+          }, [competitors, activeTab, activeEvents, sortKey, sortDirection]);
+
+          // Determine the visually active sort key and direction for headers
+          const activeEvent = activeEvents.find(e => e.id === activeTab);
+          const defaultRankBy = activeEvent?.rankBy;
+          const currentSortKey = sortKey === null ? (defaultRankBy === 'average' ? 'average' : 'single') : sortKey;
+
+          const renderSortIndicator = (key) => {
+              const isActive = currentSortKey === key;
+              if (isActive) {
+                  return <span className="text-blue-600 transition-transform">{sortDirection === 'asc' ? '▲' : '▼'}</span>;
+              }
+              return <span className="text-slate-300 group-hover:text-slate-400 transition-colors">▲</span>;
+          };
+
+          return (
+            <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+              {/* Header */}
+              <header className="bg-blue-600 text-white shadow-lg">
+                <div className="container mx-auto px-4 py-6">
+                  <div className="flex items-center space-x-3">
+                    <Trophy className="w-8 h-8 text-yellow-300" />
+                    <h1 className="text-2xl font-bold">WCA Competitor Analyzer</h1>
+                  </div>
+                  <p className="mt-2 text-blue-100 opacity-90">
+                    Parse registration lists, filter by event, and fetch global rankings automatically.
+                  </p>
                 </div>
+              </header>
 
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-9 gap-3">
-                    {EVENTS_DATA.map((ev) => {
-                        const isSelected = selectedEventIds.includes(ev.id);
-                        return (
-                            <button
-                                key={ev.id}
-                                onClick={() => toggleEvent(ev.id)}
-                                className={`
-                                    relative px-2 py-2 rounded-lg border text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2
-                                    ${isSelected 
-                                        ? 'bg-blue-600 border-blue-600 text-white shadow-md transform scale-105' 
-                                        : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300 hover:bg-slate-50'}
-                                `}
-                            >
-                                <span className={`cubing-icon event-${ev.id}`}></span>
-                                {ev.name}
-                            </button>
-                        );
-                    })}
-                </div>
-                <div className="mt-4 text-xs text-slate-400 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4" />
-                    <span>Select the events available at this competition in the column order they appear on the registration page.</span>
-                </div>
-            </div>
-        </section>
-
-
-        {/* INPUT SECTION */}
-        <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <div className="flex flex-col md:flex-row gap-4 mb-4">
-            <button 
-              onClick={() => setInputType('url')}
-              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${inputType === 'url' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-            >
-              <Globe className="w-4 h-4 inline mr-2" />
-              Import from URL
-            </button>
-            <button 
-              onClick={() => setInputType('text')}
-              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${inputType === 'text' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-            >
-              <FileText className="w-4 h-4 inline mr-2" />
-              Paste Text
-            </button>
-          </div>
-
-          {inputType === 'url' ? (
-            <div className="space-y-4">
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={inputUrl}
-                  onChange={(e) => setInputUrl(e.target.value)}
-                  placeholder="https://cubing-tw.net/event/..."
-                  className="flex-1 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-                <button 
-                  onClick={fetchFromUrl}
-                  disabled={fetchingUrl}
-                  className="bg-blue-600 text-white px-6 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center"
-                >
-                  {fetchingUrl ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Download className="w-4 h-4 mr-2"/>}
-                  Fetch
-                </button>
-              </div>
-              <p className="text-xs text-slate-500">Note: This uses a CORS proxy. Some websites may block automated access.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <textarea 
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Paste the table rows here (e.g. 1 Name WCAID Country Gender ✔ ✔ ...)"
-                className="w-full h-48 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-xs"
-              />
-              <div className="flex justify-between">
-                <button onClick={loadDemo} className="text-sm text-blue-600 hover:underline">Load Demo Data</button>
-                <button 
-                  onClick={() => parseInput()}
-                  className="bg-green-600 text-white px-8 py-2 rounded-lg font-medium hover:bg-green-700 flex items-center"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Parse & Analyze
-                </button>
-              </div>
-            </div>
-          )}
-
-          {errors.length > 0 && (
-            <div className="mt-4 p-4 bg-red-50 text-red-700 rounded-lg border border-red-200 text-sm space-y-1">
-                <div className="font-bold flex items-center"><AlertCircle className="w-4 h-4 mr-2"/> Parsing Errors</div>
-                {errors.slice(0, 5).map((err, i) => (
-                    <div key={i}>{err}</div>
-                ))}
-                {errors.length > 5 && <div>...and {errors.length - 5} more errors.</div>}
-            </div>
-          )}
-        </section>
-
-        {/* RESULTS SECTION */}
-        {competitors.length > 0 && (
-            <section className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col min-h-[500px]">
-                {/* Stats Header */}
-                <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-xl">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-blue-100 p-3 rounded-full text-blue-600">
-                            <Users className="w-6 h-6" />
+              <main className="container mx-auto px-4 py-8 space-y-8">
+                
+                {/* EVENT SELECTION PANEL */}
+                <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="bg-slate-100 px-6 py-3 border-b border-slate-200 flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                            <Settings className="w-5 h-5 text-slate-500" />
+                            <h2 className="font-semibold text-slate-700">Event Configuration</h2>
                         </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-slate-800">Competitor Analysis</h2>
-                            <p className="text-sm text-slate-500">{competitors.length} competitors found</p>
+                        <div className="text-sm text-slate-500">
+                            Expecting <strong>{activeEvents.length}</strong> columns in input
                         </div>
                     </div>
-                    {loading && (
-                        <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm">
-                            <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-500 transition-all duration-300" style={{width: `${progress}%`}}></div>
-                            </div>
-                            <span className="text-xs font-bold text-blue-600">{progress}%</span>
+                    
+                    <div className="p-6">
+                        <div className="flex flex-wrap gap-4 mb-4">
+                            <button onClick={selectAllEvents} className="text-xs font-medium px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">
+                                Select All
+                            </button>
+                            <button onClick={clearAllEvents} className="text-xs font-medium px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors">
+                                Clear All
+                            </button>
                         </div>
-                    )}
-                </div>
 
-                {/* Event Tabs */}
-                <div className="flex overflow-x-auto border-b border-slate-200 scrollbar-hide">
-                    {activeEvents.map(event => (
-                        <button
-                            key={event.id}
-                            onClick={() => setActiveTab(event.id)}
-                            className={`
-                                flex-shrink-0 px-6 py-4 text-sm font-medium transition-colors border-b-2 
-                                ${activeTab === event.id 
-                                    ? 'border-blue-600 text-blue-600 bg-blue-50' 
-                                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}
-                            `}
-                        >
-                            {event.name}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Table */}
-                <div className="overflow-x-auto flex-1">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
-                            <tr>
-                                <th className="px-6 py-3 w-16">#</th>
-                                <th className="px-6 py-3">Name</th>
-                                <th className="px-6 py-3">WCA ID</th>
-                                <th className="px-6 py-3">Country</th>
-                                
-                                {/* Single Header */}
-                                <th 
-                                    className={`px-6 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors group select-none`}
-                                    onClick={() => handleSort('single')}
-                                >
-                                    <div className={`flex items-center justify-end gap-1 ${currentSortKey === 'single' ? 'text-blue-700' : 'text-slate-500'}`}>
-                                        Single
-                                        {renderSortIndicator('single')}
-                                    </div>
-                                </th>
-
-                                {/* Average Header */}
-                                <th 
-                                    className={`px-6 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors group select-none`}
-                                    onClick={() => handleSort('average')}
-                                >
-                                    <div className={`flex items-center justify-end gap-1 ${currentSortKey === 'average' ? 'text-blue-700' : 'text-slate-500'}`}>
-                                        Average
-                                        {renderSortIndicator('average')}
-                                    </div>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {sortedCompetitors.map((comp, idx) => {
-                                // Get both results
-                                const rawSingle = comp.ranks.singles[activeTab];
-                                const rawAverage = comp.ranks.averages[activeTab];
-                                
-                                // Pass resultType to formatTime for special handling (e.g., 333fm /100 suffix)
-                                const singleStr = formatTime(rawSingle, activeTab, 'single');
-                                const averageStr = formatTime(rawAverage, activeTab, 'average');
-                                
-                                // Determine which column is the primary rank for visual distinction
-                                const isRankBySingle = currentSortKey === 'single';
-
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-9 gap-3">
+                            {EVENTS_DATA.map((ev) => {
+                                const isSelected = selectedEventIds.includes(ev.id);
                                 return (
-                                    <tr key={comp.wcaId || idx} className="hover:bg-slate-50 transition-colors">
-                                        <td className="px-6 py-3 text-slate-400 font-mono">{idx + 1}</td>
-                                        <td className="px-6 py-3 font-medium text-slate-800">
-                                            {comp.name}
-                                            {!comp.wcaId && <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Newcomer</span>}
-                                        </td>
-                                        <td className="px-6 py-3 text-slate-500 font-mono">
-                                            {comp.wcaId ? (
-                                                <a 
-                                                    href={`https://www.worldcubeassociation.org/persons/${comp.wcaId}`} 
-                                                    target="_blank" 
-                                                    rel="noopener noreferrer"
-                                                    className="text-blue-600 hover:underline"
-                                                >
-                                                    {comp.wcaId}
-                                                </a>
-                                            ) : '-'}
-                                        </td>
-                                        <td className="px-6 py-3 text-slate-600">{comp.country}</td>
-                                        
-                                        {/* Single Column */}
-                                        <td className={`px-6 py-3 text-right font-mono ${isRankBySingle ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
-                                            {singleStr || <span className="text-slate-300">-</span>}
-                                        </td>
-
-                                        {/* Average Column */}
-                                        <td className={`px-6 py-3 text-right font-mono ${!isRankBySingle ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
-                                            {averageStr || <span className="text-slate-300">-</span>}
-                                        </td>
-                                    </tr>
+                                    <button
+                                        key={ev.id}
+                                        onClick={() => toggleEvent(ev.id)}
+                                        className={`
+                                            relative px-2 py-2 rounded-lg border text-sm font-medium transition-all duration-200 flex flex-col items-center justify-center gap-1 min-w-[70px]
+                                            ${isSelected 
+                                                ? 'bg-blue-600 border-blue-600 text-white shadow-md transform scale-105' 
+                                                : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300 hover:bg-slate-50'}
+                                        `}
+                                    >
+                                        {/* Cubing Icon - Note: Requires external CSS link in <head> */}
+                                        <span className={`cubing-icon event-${ev.id} text-xl`}></span>
+                                        <span className="text-xs mt-1 leading-none">{ev.name}</span>
+                                    </button>
                                 );
                             })}
-                            {sortedCompetitors.length === 0 && (
-                                <tr>
-                                    <td colSpan="6" className="px-6 py-12 text-center text-slate-400">
-                                        No competitors registered for {activeEvent?.name}.
-                                    </td>
-                                </tr>
+                        </div>
+                        <div className="mt-4 p-3 bg-yellow-50 text-yellow-700 rounded-lg text-xs flex items-center gap-2 border border-yellow-200">
+                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                            <span>Select the events in the **exact order** they appear on the competition's registration page, as this determines how the checkmarks are parsed.</span>
+                        </div>
+                    </div>
+                </section>
+
+
+                {/* INPUT SECTION */}
+                <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                  <div className="flex flex-col md:flex-row gap-4 mb-4">
+                    <button 
+                      onClick={() => setInputType('url')}
+                      className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${inputType === 'url' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                    >
+                      <Globe className="w-4 h-4 inline mr-2" />
+                      Import from URL
+                    </button>
+                    <button 
+                      onClick={() => setInputType('text')}
+                      className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${inputType === 'text' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                    >
+                      <FileText className="w-4 h-4 inline mr-2" />
+                      Paste Text
+                    </button>
+                  </div>
+
+                  {inputType === 'url' ? (
+                    <div className="space-y-4">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input 
+                          type="url" 
+                          value={inputUrl}
+                          onChange={(e) => setInputUrl(e.target.value)}
+                          placeholder="https://cubing-tw.net/event/.../competitors"
+                          className="flex-1 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <button 
+                          onClick={fetchFromUrl}
+                          disabled={fetchingUrl}
+                          className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center sm:justify-start"
+                        >
+                          {fetchingUrl ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Download className="w-4 h-4 mr-2"/>}
+                          {fetchingUrl ? 'Fetching...' : 'Fetch'}
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-500">Note: This uses a CORS proxy (`allorigins`). Fetching may fail if the target site blocks automated access. If so, switch to the 'Paste Text' tab.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <textarea 
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        placeholder={`Paste the table rows here. It must contain the WCA ID (e.g. 2006LINC01) and the registration checkmarks/dashes in the order you selected above.\n\nExample:\n1 Chia-Leo Lin (林珈樂) 2006LINC01 Taiwan Male ✔ ✔ ✔ ✔ - - - ...`}
+                        className="w-full h-48 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-xs"
+                      />
+                      <div className="flex flex-col sm:flex-row justify-between gap-4">
+                        <button onClick={loadDemo} className="text-sm text-blue-600 hover:underline text-left">Load Demo Data (Taiwanese Championship structure)</button>
+                        <button 
+                          onClick={() => parseInput()}
+                          className="bg-green-600 text-white px-8 py-2 rounded-lg font-medium hover:bg-green-700 flex items-center justify-center"
+                        >
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Parse & Analyze
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {errors.length > 0 && (
+                    <div className="mt-4 p-4 bg-red-50 text-red-700 rounded-lg border border-red-200 text-sm space-y-1">
+                        <div className="font-bold flex items-center"><AlertCircle className="w-4 h-4 mr-2"/> Parsing Errors ({errors.length})</div>
+                        {errors.slice(0, 5).map((err, i) => (
+                            <div key={i}>{err}</div>
+                        ))}
+                        {errors.length > 5 && <div>...and {errors.length - 5} more lines had parsing issues.</div>}
+                    </div>
+                  )}
+                </section>
+
+                {/* RESULTS SECTION */}
+                {competitors.length > 0 && (
+                    <section className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col min-h-[500px]">
+                        {/* Stats Header */}
+                        <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50 rounded-t-xl gap-4">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-blue-100 p-3 rounded-full text-blue-600 flex-shrink-0">
+                                    <Users className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-slate-800">Competitor Analysis</h2>
+                                    <p className="text-sm text-slate-500">{competitors.length} competitors found</p>
+                                </div>
+                            </div>
+                            {loading && (
+                                <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm">
+                                    <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-blue-500 transition-all duration-300" style={{width: `${progress}%`}}></div>
+                                    </div>
+                                    <span className="text-xs font-bold text-blue-600 min-w-[30px]">{progress}%</span>
+                                </div>
                             )}
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-        )}
-      </main>
-    </div>
-  );
-}
+                        </div>
+
+                        {/* Event Tabs */}
+                        <div className="flex overflow-x-auto border-b border-slate-200 scrollbar-hide">
+                            {activeEvents.map(event => (
+                                <button
+                                    key={event.id}
+                                    onClick={() => setActiveTab(event.id)}
+                                    className={`
+                                        flex-shrink-0 px-6 py-4 text-sm font-medium transition-colors border-b-2 
+                                        ${activeTab === event.id 
+                                            ? 'border-blue-600 text-blue-600 bg-blue-50' 
+                                            : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}
+                                    `}
+                                >
+                                    {event.name}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Table */}
+                        <div className="overflow-x-auto flex-1">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0">
+                                    <tr>
+                                        <th className="px-6 py-3 w-16 whitespace-nowrap">#</th>
+                                        <th className="px-6 py-3 whitespace-nowrap">Name</th>
+                                        <th className="px-6 py-3 whitespace-nowrap">WCA ID</th>
+                                        <th className="px-6 py-3 whitespace-nowrap">Country</th>
+                                        
+                                        {/* Single Header */}
+                                        <th 
+                                            className={`px-6 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors group select-none whitespace-nowrap`}
+                                            onClick={() => handleSort('single')}
+                                        >
+                                            <div className={`flex items-center justify-end gap-1 ${currentSortKey === 'single' ? 'text-blue-700' : 'text-slate-500'}`}>
+                                                Single
+                                                {renderSortIndicator('single')}
+                                            </div>
+                                        </th>
+
+                                        {/* Average Header */}
+                                        <th 
+                                            className={`px-6 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors group select-none whitespace-nowrap`}
+                                            onClick={() => handleSort('average')}
+                                        >
+                                            <div className={`flex items-center justify-end gap-1 ${currentSortKey === 'average' ? 'text-blue-700' : 'text-slate-500'}`}>
+                                                Average
+                                                {renderSortIndicator('average')}
+                                            </div>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {sortedCompetitors.map((comp, idx) => {
+                                        // Get both results
+                                        const rawSingle = comp.ranks.singles[activeTab];
+                                        const rawAverage = comp.ranks.averages[activeTab];
+                                        
+                                        // Pass resultType to formatTime for special handling (e.g., 333fm /100 suffix)
+                                        const singleStr = formatTime(rawSingle, activeTab, 'single');
+                                        const averageStr = formatTime(rawAverage, activeTab, 'average');
+                                        
+                                        // Determine which column is the primary rank for visual distinction
+                                        const isRankBySingle = currentSortKey === 'single';
+
+                                        return (
+                                            <tr key={comp.wcaId || idx} className="hover:bg-slate-50 transition-colors">
+                                                <td className="px-6 py-3 text-slate-400 font-mono">{idx + 1}</td>
+                                                <td className="px-6 py-3 font-medium text-slate-800">
+                                                    {comp.name}
+                                                    {!comp.wcaId && <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Newcomer</span>}
+                                                </td>
+                                                <td className="px-6 py-3 text-slate-500 font-mono">
+                                                    {comp.wcaId ? (
+                                                        <a 
+                                                            href={`https://www.worldcubeassociation.org/persons/${comp.wcaId}`} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer"
+                                                            className="text-blue-600 hover:underline"
+                                                        >
+                                                            {comp.wcaId}
+                                                        </a>
+                                                    ) : '-'}
+                                                </td>
+                                                <td className="px-6 py-3 text-slate-600 whitespace-nowrap">{comp.country}</td>
+                                                
+                                                {/* Single Column */}
+                                                <td className={`px-6 py-3 text-right font-mono whitespace-nowrap ${isRankBySingle ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
+                                                    {singleStr || <span className="text-slate-300">-</span>}
+                                                </td>
+
+                                                {/* Average Column */}
+                                                <td className={`px-6 py-3 text-right font-mono whitespace-nowrap ${!isRankBySingle ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
+                                                    {averageStr || <span className="text-slate-300">-</span>}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {sortedCompetitors.length === 0 && (
+                                        <tr>
+                                            <td colSpan="6" className="px-6 py-12 text-center text-slate-400">
+                                                No competitors registered for {activeEvent?.name} who matched the parsing rules.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                )}
+              </main>
+            </div>
+          );
+        }
+
+        // ------------------------------------------
+        // RENDER APPLICATION - WRAPPED IN WINDOW.ONLOAD FOR ROBUSTNESS
+        // ------------------------------------------
+        window.onload = function() {
+            const container = document.getElementById('root');
+            if (container) {
+                const root = ReactDOM.createRoot(container);
+                root.render(<App />);
+            }
+        };
+    </script>
+</body>
+</html>
